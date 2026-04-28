@@ -14,6 +14,10 @@ export class JsonFragmentsStore {
     this.fragmentsByUri.set(uri, fragments);
   }
 
+  public clearFragments(uri: string): void {
+    this.fragmentsByUri.delete(uri);
+  }
+
   public getFragments(uri: string): JsonFragment[] {
     return this.fragmentsByUri.get(uri) ?? [];
   }

@@ -18,14 +18,18 @@ If you have any requirements or dependencies, add a section describing those and
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `json-fragments.autoHighlightVisibleRanges`: Automatically highlight JSON fragments in the visible ranges of the active editor.
+* `json-fragments.includePrimitiveArrays`: Treat empty arrays and arrays containing only primitive values as JSON fragments.
+
+## Commands
+
+This extension contributes the following commands:
+
+* `JSON Fragments: Scan Visible JSON Fragments`: Scan the active editor once.
+* `JSON Fragments: Toggle Highlight for File`: Toggle highlight for the active file for the current VS Code session.
+* `JSON Fragments: Toggle Temporary Highlight for Focused Files`: Toggle temporary highlight for focused files for the current VS Code session.
 
 ## Known Issues
 

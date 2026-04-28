@@ -10,7 +10,10 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:json-fragments.scanVisibleJsonFragments"
+    "onStartupFinished",
+    "onCommand:json-fragments.scanVisibleJsonFragments",
+    "onCommand:json-fragments.toggleHighlightForFile",
+    "onCommand:json-fragments.toggleTemporaryHighlightForFocusedFiles"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -18,8 +21,31 @@
       {
         "command": "json-fragments.scanVisibleJsonFragments",
         "title": "JSON Fragments: Scan Visible JSON Fragments"
+      },
+      {
+        "command": "json-fragments.toggleHighlightForFile",
+        "title": "JSON Fragments: Toggle Highlight for File"
+      },
+      {
+        "command": "json-fragments.toggleTemporaryHighlightForFocusedFiles",
+        "title": "JSON Fragments: Toggle Temporary Highlight for Focused Files"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "JSON Fragments",
+      "properties": {
+        "json-fragments.autoHighlightVisibleRanges": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically highlight JSON fragments in the visible ranges of the active editor."
+        },
+        "json-fragments.includePrimitiveArrays": {
+          "type": "boolean",
+          "default": false,
+          "description": "Treat empty arrays and arrays containing only primitive values as JSON fragments."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
