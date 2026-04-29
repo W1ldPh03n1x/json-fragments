@@ -1,5 +1,6 @@
 import * as assert from "assert";
 
+import { formatJsonFragmentsAsMarkdown } from "../markdown/jsonFragmentMarkdown";
 import { findJsonFragmentsInLine } from "../scanner/findJsonFragmentsInLine";
 
 suite("findJsonFragmentsInLine", () => {
@@ -117,5 +118,30 @@ suite("findJsonFragmentsInLine", () => {
 
     assert.strictEqual(fragments.length, 1);
     assert.strictEqual(fragments[0].raw, '{"ok":true}');
+  });
+});
+
+suite("jsonFragmentMarkdown", () => {
+  test("formats fragments as json markdown code fences", () => {
+    const markdown = formatJsonFragmentsAsMarkdown([
+      { value: { ok: true } },
+      { value: [{ id: 1 }] },
+    ]);
+
+    assert.strictEqual(markdown, [
+      "```json",
+      "{",
+      "  \"ok\": true",
+      "}",
+      "```",
+      "",
+      "```json",
+      "[",
+      "  {",
+      "    \"id\": 1",
+      "  }",
+      "]",
+      "```",
+    ].join("\n"));
   });
 });

@@ -11,6 +11,7 @@
   ],
   "activationEvents": [
     "onStartupFinished",
+    "onCommand:json-fragments.openLineJsonFragmentsPreview",
     "onCommand:json-fragments.scanVisibleJsonFragments",
     "onCommand:json-fragments.toggleHighlightForFile",
     "onCommand:json-fragments.toggleTemporaryHighlightForFocusedFiles"
@@ -21,6 +22,10 @@
       {
         "command": "json-fragments.scanVisibleJsonFragments",
         "title": "JSON Fragments: Scan Visible JSON Fragments"
+      },
+      {
+        "command": "json-fragments.openLineJsonFragmentsPreview",
+        "title": "JSON Fragments: Open Line JSON Fragments Preview"
       },
       {
         "command": "json-fragments.toggleHighlightForFile",

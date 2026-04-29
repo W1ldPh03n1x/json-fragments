@@ -2,10 +2,12 @@ import * as vscode from "vscode";
 
 import { createJsonFragmentDecorationController } from "./decorations/jsonFragmentDecorations";
 import { createJsonFragmentHoverProvider } from "./hover/jsonFragmentHoverProvider";
+import { createJsonFragmentsPreviewProvider, jsonFragmentsPreviewScheme } from "./preview/jsonFragmentsPreviewProvider";
 import { findJsonFragmentsInLine } from "./scanner/findJsonFragmentsInLine";
 import { JsonFragmentsStore, type JsonFragment } from "./store/jsonFragmentsStore";
 
 const scanVisibleJsonFragmentsCommand = "json-fragments.scanVisibleJsonFragments";
+const openLineJsonFragmentsPreviewCommand = "json-fragments.openLineJsonFragmentsPreview";
 const toggleHighlightForFileCommand = "json-fragments.toggleHighlightForFile";
 const toggleTemporaryHighlightForFocusedFilesCommand = "json-fragments.toggleTemporaryHighlightForFocusedFiles";
 const configurationSection = "json-fragments";
@@ -17,6 +19,9 @@ export function activate(context: vscode.ExtensionContext) {
   const store = new JsonFragmentsStore();
   const decorations = createJsonFragmentDecorationController();
   const hoverProvider = createJsonFragmentHoverProvider(store);
+  const previewProvider = createJsonFragmentsPreviewProvider(() => ({
+    includePrimitiveArrays: shouldIncludePrimitiveArrays(),
+  }));
   let lastAutoHighlightedEditor: vscode.TextEditor | undefined;
   let autoHighlightTimeout: NodeJS.Timeout | undefined;
   let temporaryHighlightForFocusedFilesEnabled = false;
@@ -43,13 +48,11 @@ export function activate(context: vscode.ExtensionContext) {
     lastAutoHighlightedEditor = undefined;
   };
 
-  const isAutoHighlightEnabled = () => vscode.workspace
-    .getConfiguration(configurationSection)
-    .get<boolean>(autoHighlightVisibleRangesSetting, false);
+  const isAutoHighlightEnabled = () =>
+    vscode.workspace.getConfiguration(configurationSection).get<boolean>(autoHighlightVisibleRangesSetting, false);
 
-  const shouldIncludePrimitiveArrays = () => vscode.workspace
-    .getConfiguration(configurationSection)
-    .get<boolean>(includePrimitiveArraysSetting, false);
+  const shouldIncludePrimitiveArrays = () =>
+    vscode.workspace.getConfiguration(configurationSection).get<boolean>(includePrimitiveArraysSetting, false);
 
   const shouldHighlightEditor = (editor: vscode.TextEditor) => {
     const uri = editor.document.uri.toString();
@@ -107,6 +110,27 @@ export function activate(context: vscode.ExtensionContext) {
     scanEditor(editor);
   });
 
+  const openLineJsonFragmentsPreview = vscode.commands.registerCommand(
+    openLineJsonFragmentsPreviewCommand,
+    async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor) {
+        vscode.window.showInformationMessage("JSON Fragments: no active editor to preview.");
+        return;
+      }
+
+      const line = editor.selection.active.line;
+      if (scanLine(editor, line, { includePrimitiveArrays: shouldIncludePrimitiveArrays() }).length === 0) {
+        vscode.window.showInformationMessage("JSON Fragments: no JSON fragments found on the active line.");
+        return;
+      }
+
+      const previewUri = previewProvider.createPreviewUri(editor, line);
+
+      await vscode.commands.executeCommand("markdown.showPreview", previewUri);
+    },
+  );
+
   const toggleHighlightForFile = vscode.commands.registerCommand(toggleHighlightForFileCommand, () => {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -139,12 +163,22 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     scanCommand,
+    openLineJsonFragmentsPreview,
     toggleHighlightForFile,
     toggleTemporaryHighlightForFocusedFiles,
     decorations,
     vscode.languages.registerHoverProvider({ scheme: "*" }, hoverProvider),
+    previewProvider,
+    vscode.workspace.registerTextDocumentContentProvider(jsonFragmentsPreviewScheme, previewProvider),
     vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor) {
+        previewProvider.refreshEditorLine(editor);
+      }
+
       scheduleAutoHighlight(editor);
+    }),
+    vscode.window.onDidChangeTextEditorSelection((event) => {
+      previewProvider.refreshEditorLine(event.textEditor);
     }),
     vscode.window.onDidChangeTextEditorVisibleRanges((event) => {
       if (event.textEditor === vscode.window.activeTextEditor) {
@@ -153,6 +187,8 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.workspace.onDidChangeTextDocument((event) => {
       const editor = vscode.window.activeTextEditor;
+      previewProvider.refreshSource(event.document.uri);
+
       if (editor?.document === event.document) {
         scheduleAutoHighlight(editor);
       }
@@ -162,6 +198,7 @@ export function activate(context: vscode.ExtensionContext) {
         event.affectsConfiguration(`${configurationSection}.${autoHighlightVisibleRangesSetting}`) ||
         event.affectsConfiguration(`${configurationSection}.${includePrimitiveArraysSetting}`)
       ) {
+        previewProvider.refreshAll();
         scheduleAutoHighlight();
       }
     }),
@@ -175,6 +212,24 @@ export function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {}
 
+function scanLine(
+  editor: vscode.TextEditor,
+  line: number,
+  options: {
+    includePrimitiveArrays: boolean;
+  },
+): JsonFragment[] {
+  const document = editor.document;
+  const uri = document.uri.toString();
+  const text = document.lineAt(line).text;
+
+  return findJsonFragmentsInLine(text, options).map((fragment) => ({
+    uri,
+    line,
+    ...fragment,
+  }));
+}
+
 function scanVisibleRanges(
   editor: vscode.TextEditor,
   options: {
@@ -182,7 +237,6 @@ function scanVisibleRanges(
   },
 ): JsonFragment[] {
   const document = editor.document;
-  const uri = document.uri.toString();
   const visibleLines = new Set<number>();
 
   for (const range of editor.visibleRanges) {
@@ -197,12 +251,6 @@ function scanVisibleRanges(
   return [...visibleLines]
     .sort((left, right) => left - right)
     .flatMap((line): JsonFragment[] => {
-      const text = document.lineAt(line).text;
-
-      return findJsonFragmentsInLine(text, options).map((fragment) => ({
-        uri,
-        line,
-        ...fragment,
-      }));
+      return scanLine(editor, line, options);
     });
 }

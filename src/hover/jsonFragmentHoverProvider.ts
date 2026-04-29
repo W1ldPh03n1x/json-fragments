@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { formatJsonFragmentValueAsMarkdown } from "../markdown/jsonFragmentMarkdown";
 import type { JsonFragmentsStore } from "../store/jsonFragmentsStore";
 
 export function createJsonFragmentHoverProvider(store: JsonFragmentsStore): vscode.HoverProvider {
@@ -15,9 +16,7 @@ export function createJsonFragmentHoverProvider(store: JsonFragmentsStore): vsco
         return undefined;
       }
 
-      const markdown = new vscode.MarkdownString(
-        `\`\`\`json\n${JSON.stringify(fragment.value, null, 2)}\n\`\`\``,
-      );
+      const markdown = new vscode.MarkdownString(formatJsonFragmentValueAsMarkdown(fragment.value));
 
       return new vscode.Hover(markdown, new vscode.Range(
         fragment.line,
