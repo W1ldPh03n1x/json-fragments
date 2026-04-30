@@ -10,11 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:json-fragments.openLineJsonFragmentsPreview",
-    "onCommand:json-fragments.scanVisibleJsonFragments",
-    "onCommand:json-fragments.toggleHighlightForFile",
-    "onCommand:json-fragments.toggleTemporaryHighlightForFocusedFiles"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
