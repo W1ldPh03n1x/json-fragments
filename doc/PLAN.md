@@ -67,7 +67,10 @@ Detailed notes: `doc/fragment-tracker.md`.
 Settings should control optional behavior:
 
 - enable automatic visible-range highlighting;
+- enable hover preview;
 - include primitive-only arrays if needed;
+- include empty objects if needed;
+- include or exclude files by glob patterns;
 - configure debounce for automatic scanning.
 
 Future settings should control:
@@ -112,21 +115,29 @@ Known limitations:
 
 ### 3. Hover Preview
 
-Status: planned.
+Status: first working implementation exists.
 
 Register a hover provider that shows formatted JSON for a fragment under the cursor.
 
 Detailed feature plan: `doc/feature-2-hover-preview.md`.
 
-Expected result:
+Current result:
 
 - hovering over a detected fragment shows a formatted JSON preview;
 - hover reuses the current store snapshot when available and falls back to scanning only the hovered line;
 - hover remains fast for large files by scanning only the relevant line or cached fragment list.
+- hover can be disabled with `json-fragments.hover.enabled`;
+- hover respects the configured file include and exclude filters.
+
+Known limitations:
+
+- hover only scans the hovered line as a fallback, so multiline fragments are not shown yet;
+- hover content is read-only formatted JSON with no actions or links;
+- scanner limits are still hard-coded in `src/config/constants.ts`.
 
 ### 4. Ctrl-Click Static Preview
 
-Status: planned.
+Status: next planned feature.
 
 Add document-link or definition-style interaction for fragments.
 
@@ -135,6 +146,13 @@ Expected result:
 - when the user holds `Ctrl`, VS Code indicates that a fragment is clickable;
 - `Ctrl+Click` opens the clicked fragment in a new read-only tab;
 - the opened tab contains formatted JSON and does not update after opening.
+
+Preferred MVP approach:
+
+- use a virtual text document through `TextDocumentContentProvider`;
+- use a custom URI scheme for fragment preview documents;
+- open the preview as JSON text where VS Code can provide native editor behavior;
+- reuse the same fragment lookup and formatter behavior as hover.
 
 ### 5. Dynamic Preview Command
 
@@ -178,6 +196,7 @@ Remaining:
 - large selections need limits after selection scanning exists;
 - commands and settings need README documentation;
 - scan-limit skips currently do not surface diagnostics;
+- feature plans should stay aligned with implementation status as features land.
 
 ## Current Module Structure
 
@@ -186,6 +205,7 @@ Remaining:
 - `src/scanner`: fragment detection and JSON formatting.
 - `src/store`: per-document fragment snapshots and change events.
 - `src/highlight`: decoration presentation and rendering.
+- `src/hover`: hover provider and Markdown hover content builder.
 - `src/tracking`: VS Code event orchestration for scans.
 - `src/extension.ts`: activation, object construction, command registration.
 
@@ -205,5 +225,4 @@ Remaining:
 - Whether static preview should use a virtual text document or a webview.
 - Whether dynamic preview should be a virtual document, a webview, or a custom editor.
 - Whether current scanner limits should become user-facing settings.
-- Whether hover should live in its own `src/hover` module or under a broader editor integration module.
 - How detailed inline fragment syntax highlighting should be, given that it has to work inside arbitrary source files.
