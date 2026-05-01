@@ -149,10 +149,165 @@ New settings to consider:
 
 - `src/scanner`: scanner and fragment range model.
 - `src/domain`: shared fragment domain types.
-- `src/editor`: editor decorations and viewport scan orchestration.
+- `src/editor`: editor decoration rendering, range presentation, viewport scan orchestration.
 - `src/store`: per-document highlighting state and fragment cache.
 - `src/config`: settings access.
 - `src/extension.ts`: command registration and provider wiring.
+
+## Architecture
+
+Inline highlighting should be split into scanning, state, presentation, and decoration rendering.
+
+The decoration layer must not scan documents, parse JSON, handle hover behavior, or decide when scanning should happen. It should only render text decorations for already known ranges.
+
+Recommended flow:
+
+```text
+VS Code events
+  -> FragmentScanCoordinator
+  -> Scanner
+  -> Store
+  -> HighlightPresenter
+  -> TextDecorator
+  -> editor.setDecorations(...)
+```
+
+### FragmentScanCoordinator
+
+The scan coordinator owns editor lifecycle orchestration.
+
+Responsibilities:
+
+- react to active editor, visible range, document change, configuration change, and document close events;
+- decide whether highlighting is enabled for a document;
+- debounce scan requests;
+- build scan ranges from the current visible editor ranges;
+- call the scanner;
+- ignore stale scan results when the document version has changed;
+- write accepted fragments into `Store`;
+- clear the store when highlighting is disabled or a document is closed.
+
+It must not call `editor.setDecorations` directly.
+
+### Store
+
+The main fragment store is the source of truth for current fragments and their ranges.
+
+It should store snapshots by document URI:
+
+```ts
+type FragmentSnapshot = {
+  uri: vscode.Uri;
+  version: number;
+  scannedRanges: readonly vscode.Range[];
+  fragments: readonly Fragment[];
+};
+```
+
+The store should expose a change event so presentation code, hover providers, preview features, and other integrations can react when fragments change:
+
+```ts
+type FragmentStoreChangeReason =
+  | "scan"
+  | "clear"
+  | "document-closed"
+  | "disabled";
+
+type FragmentStoreChange = {
+  uri: vscode.Uri;
+  version: number;
+  ranges: readonly vscode.Range[];
+  fragments: readonly Fragment[];
+  reason: FragmentStoreChangeReason;
+};
+```
+
+Expected API shape:
+
+```ts
+class Store {
+  readonly onDidChangeFragments: vscode.Event<FragmentStoreChange>;
+
+  setSnapshot(snapshot: FragmentSnapshot): void;
+  clearDocument(uri: vscode.Uri, reason: FragmentStoreChangeReason): void;
+  getSnapshot(uri: vscode.Uri): FragmentSnapshot | undefined;
+  findFragmentAt(uri: vscode.Uri, position: vscode.Position): Fragment | undefined;
+}
+```
+
+The store should keep complete fragments, not just ranges, because hover and click features will need `raw` and parsed `value` later.
+
+### HighlightPresenter
+
+The presenter connects range state to editor decoration rendering.
+
+Responsibilities:
+
+- listen to `Store.onDidChangeFragments`;
+- find visible editors that show the changed document URI;
+- call `TextDecorator.render(editor, ranges)` for range updates;
+- call `TextDecorator.clear(editor)` for clear events.
+
+This keeps `TextDecorator` independent from the store and keeps the store independent from VS Code decoration APIs.
+
+### TextDecorator
+
+`TextDecorator` is the only entity that owns VS Code text decoration types.
+
+Responsibilities:
+
+- create and dispose `vscode.TextEditorDecorationType`;
+- render a full range snapshot into a specific `vscode.TextEditor`;
+- clear decorations for a specific editor;
+- recreate decoration types when decoration style settings change;
+- keep the last rendered ranges for visible editors so style changes can be reapplied without rescanning.
+
+It should be deliberately small:
+
+```ts
+class TextDecorator implements vscode.Disposable {
+  setStyle(style: FragmentDecorationStyle): void;
+  render(editor: vscode.TextEditor, ranges: readonly vscode.Range[]): void;
+  clear(editor: vscode.TextEditor): void;
+  clearDocument(uri: vscode.Uri): void;
+  dispose(): void;
+}
+```
+
+It should not know that the ranges represent JSON fragments. The same mechanism should be reusable for other text range decorations if needed.
+
+### Decoration Style
+
+Highlight appearance should be described separately from rendering and scanning.
+
+Example shape:
+
+```ts
+type FragmentDecorationStyle = {
+  borderColor: vscode.ThemeColor;
+  backgroundColor?: vscode.ThemeColor;
+  overviewRulerColor?: vscode.ThemeColor;
+  borderRadius?: string;
+};
+```
+
+The first version can hard-code a subtle default style, but the style should still flow through a dedicated style provider or factory. This keeps future settings and theme-aware changes local to decoration code.
+
+Prefer `vscode.ThemeColor` tokens where possible so VS Code can adapt colors when the active theme changes. If extension settings change the decoration shape itself, recreate the decoration type and re-render the last known ranges.
+
+### Redraw Strategy
+
+For the MVP, redraw the full range snapshot for the affected editor and decoration type.
+
+VS Code decorations are naturally applied as a replacement set:
+
+```ts
+editor.setDecorations(decorationType, ranges);
+```
+
+This means incremental add/remove logic is not required for the first version. Full snapshot rendering is simpler and avoids local diff bugs around document edits, stale ranges, and overlapping updates.
+
+Incremental updates can be considered later only if full snapshot rendering becomes a measured performance problem.
 
 ## Implementation Plan
 
@@ -162,7 +317,7 @@ Implement and test the domain scanner described in `doc/step-1-fragment-detectio
 
 The editor feature should depend on this scanner instead of parsing JSON directly in VS Code integration code.
 
-### 2. Highlight State
+### 2. Highlight State and Range Store
 
 Track per-document state:
 
@@ -172,14 +327,19 @@ Track per-document state:
 - current fragments;
 - active decoration ranges.
 
-### 3. Decoration Manager
+Expose range changes through a store event so decoration rendering can update without being coupled to scanning.
 
-Create a small editor integration that:
+### 3. Text Decorator
+
+Create a small editor rendering integration that:
 
 - owns `TextEditorDecorationType`;
-- converts fragments to `vscode.Range`;
-- applies decorations to the active editor;
-- clears decorations when highlighting is disabled or the document closes.
+- receives already computed `vscode.Range` values;
+- applies decorations to a specific editor;
+- clears decorations when highlighting is disabled or the document closes;
+- recreates decoration types when style settings change.
+
+It should not scan, parse, subscribe to scanner events, or contain hover behavior.
 
 ### 4. Viewport Range Builder
 
@@ -192,9 +352,9 @@ It should:
 - clamp ranges to document boundaries;
 - avoid rescanning when the visible range is still covered by the cached padded range.
 
-### 5. Event Wiring
+### 5. Event Wiring and Presentation
 
-Update highlights on:
+Use a scan coordinator to update range state on:
 
 - active editor change;
 - visible range change;
@@ -203,6 +363,8 @@ Update highlights on:
 - document close.
 
 Use debouncing for scroll and document change events.
+
+Use a presenter to listen to range store changes and forward the latest range snapshots to `TextDecorator`.
 
 ### 6. Commands
 

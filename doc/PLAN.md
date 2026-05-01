@@ -75,6 +75,8 @@ Expected result:
 
 Register a hover provider that shows formatted JSON for a fragment under the cursor.
 
+Detailed feature plan: `doc/feature-2-hover-preview.md`.
+
 Expected result:
 
 - hovering over a detected fragment shows a formatted JSON preview;
