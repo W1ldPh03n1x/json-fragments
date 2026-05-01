@@ -40,6 +40,7 @@ It does not render highlights directly. Rendering stays in `HighlightPresenter`,
 - `Store`: keeps the latest fragment snapshot per document.
 - `Config`: provides scanning and highlighting settings.
 - `HighlightPresenter`: subscribes to `Store` and updates decorations.
+- Future `FragmentHoverProvider`: reads current snapshots from `Store` and can fall back to local current-line scanning without asking the tracker to rescan visible ranges.
 
 ## State
 
@@ -66,7 +67,7 @@ Current limitation:
 
 Future scan scopes:
 
-- current line for hover;
+- current line as a local hover fallback owned by the hover provider;
 - current selection for preview;
 - whole document when explicitly requested;
 - changed ranges after document edits.
@@ -157,6 +158,29 @@ HighlightPresenter
 TextDecorator
 ```
 
+Hover preview is expected to be a separate read path:
+
+```text
+VS Code hover request
+        |
+        v
+FragmentHoverProvider
+        |
+        v
+Store.getSnapshot / Store.findFragmentAt
+        |
+        v
+Scanner.scanLine fallback when the store snapshot is missing or stale
+        |
+        v
+FragmentHover
+        |
+        v
+vscode.Hover
+```
+
+`FragmentTracker` should not be called by hover requests in the MVP. It remains responsible for background and command-driven snapshots, while hover remains a lightweight on-demand reader.
+
 ## Placement
 
 Current module:
@@ -165,6 +189,8 @@ Current module:
 - `src/tracking/index.ts`
 
 `FragmentTracker` can use VS Code APIs because it is an integration layer. Scanner logic should remain independent from editor lifecycle and presentation concerns.
+
+Hover provider code should live outside `src/tracking`, for example in `src/hover`, because it is a presentation/integration feature rather than tracking lifecycle coordination.
 
 ## Current Commands
 

@@ -121,7 +121,7 @@ Detailed feature plan: `doc/feature-2-hover-preview.md`.
 Expected result:
 
 - hovering over a detected fragment shows a formatted JSON preview;
-- hover uses the same scanner result as highlighting where possible;
+- hover reuses the current store snapshot when available and falls back to scanning only the hovered line;
 - hover remains fast for large files by scanning only the relevant line or cached fragment list.
 
 ### 4. Ctrl-Click Static Preview

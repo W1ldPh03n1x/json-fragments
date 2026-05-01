@@ -6,7 +6,8 @@ Planned. No hover provider is implemented yet.
 
 Relevant existing pieces:
 
-- `Store.findFragmentAt(uri, position)` can find cached fragments for highlighted documents.
+- `Store.getSnapshot(uri)` exposes the latest tracked fragment snapshot for a document.
+- `Store.findFragmentAt(uri, position)` can find a fragment in the current cached snapshot.
 - `Scanner.format(value)` can produce formatted JSON.
 - `Scanner.scanLine(line)` can support fallback line scanning.
 - `FragmentTracker` keeps store snapshots current for tracked or auto-highlighted visible ranges.
@@ -62,18 +63,65 @@ Do not implement yet:
 
 ## Data Source
 
-Hover should reuse scanner results from highlighting when they are available and current for the document version.
+Hover should treat `Store` as a read-through cache of the current fragment model.
 
-If no suitable cached result exists, the MVP can scan only the hovered line. This keeps hover responsive without requiring automatic highlighting to be enabled.
+If the store has a snapshot for the document and the snapshot version matches the current document version, hover can reuse that snapshot. If no suitable cached snapshot exists, the MVP can scan only the hovered line. This keeps hover responsive without requiring automatic highlighting to be enabled.
 
 Recommended lookup order:
 
-1. Ask the per-document fragment cache for a fragment containing the hover position.
-2. If no cached fragment is found, scan the current line.
-3. Return the fragment whose range contains the hover position.
-4. Return no hover when no fragment is found.
+1. Ask `Store.getSnapshot(document.uri)` for the current document snapshot.
+2. If `snapshot.version === document.version`, ask the store for a fragment containing the hover position.
+3. If no current cached fragment is found, scan only `document.lineAt(position.line)`.
+4. Return the fragment whose range contains the hover position.
+5. Return no hover when no fragment is found.
 
 The hover provider should not scan the entire document for a single hover request.
+
+The hover provider should not write fallback line-scan results back into the store for the MVP. The store remains owned by `FragmentTracker`; hover only reads from it.
+
+## Mental Model
+
+`FragmentHoverProvider` answers a single VS Code question:
+
+```text
+The user is hovering at position X in document Y. Is there a JSON fragment here?
+```
+
+It is a lightweight projection of the fragment model into VS Code's hover API.
+
+It should:
+
+- receive a document and position from VS Code;
+- resolve a fragment under that position from the current store snapshot or a local line scan;
+- pass the resolved fragment to `FragmentHover` for rendering;
+- return a `vscode.Hover` or `undefined`.
+
+It should not:
+
+- enable or disable tracking;
+- trigger visible-range scans through `FragmentTracker`;
+- manage highlight decorations;
+- own document lifecycle state;
+- show notifications when no hover can be produced.
+
+The ownership boundaries are:
+
+```text
+FragmentTracker
+  owns scanner scheduling, visible-range scans, and store snapshots
+
+Store
+  owns the latest known fragments per document
+
+HighlightPresenter
+  owns rendering tracked fragments as editor decorations
+
+FragmentHoverProvider
+  owns answering VS Code hover requests
+
+FragmentHover
+  owns converting a Fragment into hover presentation
+```
 
 ## Markdown Rendering
 
@@ -103,8 +151,9 @@ If a limit is hit, the hover provider should return no hover instead of showing 
 
 ## Proposed Modules
 
-- `src/hover`: hover provider and VS Code `MarkdownString` integration.
-- `src/store`: fragment cache lookup by document URI, version, and position.
+- `src/hover`: hover provider and fragment-to-hover presentation.
+- `src/store`: current snapshot lookup and cached fragment lookup by document URI and position.
+- `src/tracking`: background snapshot production through `FragmentTracker`.
 - `src/scanner`: fallback line scanning and formatting.
 - `src/domain`: shared fragment type and range helpers if needed.
 
@@ -112,15 +161,17 @@ If a limit is hit, the hover provider should return no hover instead of showing 
 
 ### 1. Hover Content Builder
 
-Create a small function that accepts formatted JSON text and returns Markdown hover content.
+Create a `FragmentHover` class that accepts a `Fragment` and returns its VS Code hover presentation.
 
-It should produce only a fenced `json` code block for the MVP.
+It should produce only a fenced `json` code block for the MVP. Presentation changes should happen in this class without changing fragment lookup or VS Code request handling.
 
 ### 2. Fragment Lookup
 
 Add a lookup helper that checks whether a source position is inside a known fragment range.
 
-Prefer cached fragments from highlighting when available. Fall back to scanning the current line when cache is missing or stale.
+Prefer a current store snapshot when available. A snapshot is current only when its stored document version matches the current VS Code document version.
+
+Fall back to scanning the current line when the cache is missing, stale, or does not contain a fragment at the hover position.
 
 ### 3. Hover Provider
 
@@ -130,6 +181,8 @@ The provider should:
 
 - receive the current document and position;
 - resolve the fragment under that position;
+- delegate presentation to `FragmentHover`;
+- avoid writing fallback scan results into the store;
 - return `undefined` when there is no fragment;
 - return `new vscode.Hover(markdown, fragment.range)` when a fragment is found.
 

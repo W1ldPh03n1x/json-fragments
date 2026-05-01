@@ -1,7 +1,10 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
+import { Config } from "../config";
+import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
 import { createScanner, type Fragment, type ScannerOptions } from "../scanner";
+import { Store } from "../store";
 
 const defaultOptions: ScannerOptions = {
   includePrimitiveArrays: false,
@@ -168,6 +171,86 @@ suite("Scanner.scanLine", () => {
   });
 });
 
+suite("FragmentHoverProvider", () => {
+  test("builds Markdown JSON code block", () => {
+    const markdown = createFragmentHoverMarkdown([
+      "{",
+      "  \"ok\": true",
+      "}",
+    ].join("\n"));
+
+    assert.strictEqual(markdown.isTrusted, false);
+    assert.ok(markdown.value.includes("```json"));
+    assert.ok(markdown.value.includes("\"ok\": true"));
+  });
+
+  test("renders a fragment as VS Code hover", () => {
+    const fragment = createScanner(defaultOptions).scanString('INFO {"ok":true}').fragments[0];
+    const hover = new FragmentHover(createScanner(defaultOptions)).render(fragment);
+
+    assertHoverContains(hover, "\"ok\": true");
+  });
+
+  test("uses current store snapshot when available", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///cached.log", 3, 'INFO {"ok":true}');
+    const fragment = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments[0];
+
+    store.setSnapshot({
+      uri: document.uri,
+      version: document.version,
+      scannedRanges: [document.lineAt(0).range],
+      fragments: [fragment],
+    });
+
+    const hover = createProvider(store).provideHover(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assertHoverContains(hover, "\"ok\": true");
+    store.dispose();
+  });
+
+  test("falls back to scanning the hovered line when cache is missing", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///fallback.log", 1, 'INFO {"ok":true}');
+    const hover = createProvider(store).provideHover(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assertHoverContains(hover, "\"ok\": true");
+    store.dispose();
+  });
+
+  test("ignores stale store snapshot and scans the hovered line", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///stale.log", 2, 'INFO {"fresh":true}');
+    const staleFragment = createScanner(defaultOptions).scanLine(
+      createTextLine(0, 'INFO {"stale":true}'),
+    ).fragments[0];
+
+    store.setSnapshot({
+      uri: document.uri,
+      version: 1,
+      scannedRanges: [staleFragment.range],
+      fragments: [staleFragment],
+    });
+
+    const hover = createProvider(store).provideHover(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assertHoverContains(hover, "\"fresh\": true");
+    store.dispose();
+  });
+});
+
 function assertRange(
   fragment: Fragment,
   startLine: number,
@@ -192,4 +275,47 @@ function createTextLine(lineNumber: number, text: string): vscode.TextLine {
     firstNonWhitespaceCharacterIndex: text.search(/\S/),
     isEmptyOrWhitespace: text.trim().length === 0,
   };
+}
+
+function createProvider(store: Store<Fragment>): FragmentHoverProvider {
+  return new FragmentHoverProvider(createConfig(), store);
+}
+
+function createConfig(): Config {
+  return {
+    scannerOptions: {
+      includePrimitiveArrays: defaultOptions.includePrimitiveArrays,
+    },
+  } as Config;
+}
+
+function createTextDocument(
+  uri: string,
+  version: number,
+  ...lines: string[]
+): vscode.TextDocument {
+  return {
+    uri: vscode.Uri.parse(uri),
+    version,
+    lineAt: (line: number) => createTextLine(line, lines[line] ?? ""),
+  } as vscode.TextDocument;
+}
+
+function createCancellationToken(isCancellationRequested: boolean): vscode.CancellationToken {
+  return {
+    isCancellationRequested,
+    onCancellationRequested: () => ({ dispose: () => {} }),
+  };
+}
+
+function assertHoverContains(
+  hover: vscode.ProviderResult<vscode.Hover>,
+  expected: string,
+): void {
+  assert.ok(hover instanceof vscode.Hover);
+
+  const [content] = hover.contents;
+
+  assert.ok(content instanceof vscode.MarkdownString);
+  assert.ok(content.value.includes(expected));
 }
