@@ -14,9 +14,9 @@ Implemented modules:
 
 Current limitations:
 
-- visible ranges are scanned line by line;
+- expanded visible ranges are scanned line by line;
 - multiline fragments are not highlighted yet;
-- viewport lookahead and range hysteresis are not implemented;
+- range hysteresis is not implemented;
 - scan limits are constants, not user settings;
 - `openLineJsonFragmentsPreview` is contributed but not implemented.
 
@@ -40,21 +40,16 @@ Highlighting should be subtle by default. It should make valid fragments discove
 
 ## Viewport Scanning
 
-By default, automatic scanning should scan exactly the visible editor ranges.
+By default, automatic scanning scans exactly the visible editor ranges.
 
-Add a separate setting for viewport scan padding. When enabled, the extension scans additional lines above and below the visible viewport.
+The `json-fragments.viewportLookaheadRatio` setting adds viewport scan padding. When it is greater than `0`, the extension scans additional lines above and below the visible viewport.
 
-Proposed behavior:
+Current behavior:
 
 - default padding: `0`;
-- optional padding mode: scan half a viewport above and half a viewport below;
-- future-compatible setting shape: either boolean feature flag or numeric ratio.
-
-Recommended setting:
-
-- `json-fragments.viewportLookaheadRatio`;
-- default: `0`;
-- suggested non-default value: `0.5`.
+- `0.5`: scan half a viewport above and half a viewport below;
+- `1`: scan one viewport above and one viewport below;
+- values are bounded to the `0..1` range.
 
 This keeps the default behavior simple and predictable, while allowing smoother scrolling for users who want it.
 
@@ -157,10 +152,10 @@ Existing settings:
 - `json-fragments.autoHighlightVisibleRanges`;
 - `json-fragments.includePrimitiveArrays`;
 - `json-fragments.autoHighlightDebounceMs`.
+- `json-fragments.viewportLookaheadRatio`.
 
 New settings to consider:
 
-- `json-fragments.viewportLookaheadRatio`: number from `0` to `1`, default `0`;
 - `json-fragments.maxScanCharacters`: default to a conservative value;
 - `json-fragments.maxLineLength`: default to a conservative value;
 - `json-fragments.maxFragmentsPerScan`: default to a conservative value.
@@ -372,15 +367,13 @@ It should not scan, parse, subscribe to scanner events, or contain hover behavio
 
 Status: partially implemented.
 
-Current behavior converts `editor.visibleRanges` into unique line numbers and scans those lines. It does not merge padded ranges, apply viewport lookahead, or use hysteresis yet.
+Current behavior expands `editor.visibleRanges` with `viewportLookaheadRatio`, clamps them to document boundaries, converts the expanded ranges into unique line numbers, and scans those lines. It does not merge overlapping padded ranges or use hysteresis yet.
 
 Create logic that converts `editor.visibleRanges` into scan ranges.
 
 It should:
 
 - merge overlapping visible ranges;
-- apply `viewportLookaheadRatio`;
-- clamp ranges to document boundaries;
 - avoid rescanning when the visible range is still covered by the cached padded range.
 
 ### 5. Event Wiring and Presentation
@@ -434,7 +427,6 @@ Manual verification in the extension host:
 
 ## Open Decisions
 
-- Whether `viewportLookaheadRatio` should be a number setting from the start or a boolean feature flag first.
 - Exact decoration style for the whole-fragment highlight.
 - Whether to keep cached fragments only for the active editor or for every highlighted document.
 - Whether scan-limit skips should be completely silent or visible in a debug output channel.

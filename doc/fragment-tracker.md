@@ -56,9 +56,9 @@ The canonical fragment list remains in `Store`.
 
 ## Scan Scope
 
-For inline highlighting, the current implementation scans visible ranges only.
+For inline highlighting, the current implementation scans expanded visible ranges.
 
-Visible ranges are expanded to line numbers and each line is scanned independently with `scanner.scanLine(...)`.
+`json-fragments.viewportLookaheadRatio` controls how many extra lines are scanned above and below each visible range. The tracker clamps expanded ranges to document boundaries, expands them to line numbers, and scans each line independently with `scanner.scanLine(...)`.
 
 Current limitation:
 

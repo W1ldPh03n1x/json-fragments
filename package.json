@@ -50,6 +50,13 @@
           "default": 100,
           "minimum": 0,
           "description": "Delay in milliseconds before rescanning visible ranges after editor and document events."
+        },
+        "json-fragments.viewportLookaheadRatio": {
+          "type": "number",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Scan additional lines around visible editor ranges. 0 scans only visible ranges, 1 scans one extra viewport above and below."
         }
       }
     }

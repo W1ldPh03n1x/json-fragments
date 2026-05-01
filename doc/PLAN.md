@@ -74,7 +74,7 @@ Future settings should control:
 
 - include all fragments from selected text in dynamic preview;
 - enable syntax highlighting in previews;
-- configurable scan limits and viewport lookahead.
+- configurable scan limits.
 
 Current hard-coded scanner limits live in `src/config/constants.ts`.
 
@@ -106,9 +106,9 @@ Current result:
 
 Known limitations:
 
-- visible ranges are scanned line by line;
+- expanded visible ranges are scanned line by line;
 - multiline JSON fragments are not highlighted yet;
-- viewport lookahead and range hysteresis are not implemented.
+- range hysteresis is not implemented.
 
 ### 3. Hover Preview
 

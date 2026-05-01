@@ -154,8 +154,12 @@ export class FragmentTracker implements vscode.Disposable {
             ...this.config.scannerOptions,
             ...scannerLimits,
         });
-        const scannedRanges = editor.visibleRanges;
-        const lines = getVisibleLineNumbers(scannedRanges);
+        const scannedRanges = createScanRanges(
+            editor.visibleRanges,
+            editor.document.lineCount,
+            this.config.get("viewportLookaheadRatio"),
+        );
+        const lines = getRangeLineNumbers(scannedRanges);
         const fragments: Fragment[] = [];
 
         for (const lineNumber of lines) {
@@ -186,7 +190,35 @@ export class FragmentTracker implements vscode.Disposable {
     }
 }
 
-function getVisibleLineNumbers(ranges: readonly vscode.Range[]): number[] {
+function createScanRanges(
+    visibleRanges: readonly vscode.Range[],
+    documentLineCount: number,
+    lookaheadRatio: number,
+): vscode.Range[] {
+    const boundedLookaheadRatio = clampRatio(lookaheadRatio);
+
+    return visibleRanges.map((range) => {
+        const lineCount = range.end.line - range.start.line + 1;
+        const paddingLines = Math.floor(lineCount * boundedLookaheadRatio);
+        const startLine = clampLine(range.start.line - paddingLines, documentLineCount);
+        const endLine = clampLine(range.end.line + paddingLines, documentLineCount);
+
+        return new vscode.Range(
+            new vscode.Position(startLine, 0),
+            new vscode.Position(endLine, Number.MAX_SAFE_INTEGER),
+        );
+    });
+}
+
+function clampRatio(value: number): number {
+    return Math.min(Math.max(value, 0), 1);
+}
+
+function clampLine(line: number, documentLineCount: number): number {
+    return Math.min(Math.max(line, 0), documentLineCount - 1);
+}
+
+function getRangeLineNumbers(ranges: readonly vscode.Range[]): number[] {
     const lines = new Set<number>();
 
     for (const range of ranges) {

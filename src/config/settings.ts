@@ -5,12 +5,14 @@ export type SettingsSchema = {
   autoHighlightVisibleRanges: boolean;
   includePrimitiveArrays: boolean;
   autoHighlightDebounceMs: number;
+  viewportLookaheadRatio: number;
 };
 
 export const settingsDefaults: SettingsSchema = {
   autoHighlightVisibleRanges: false,
   includePrimitiveArrays: false,
   autoHighlightDebounceMs: 100,
+  viewportLookaheadRatio: 0,
 };
 
 export type SettingsKey = keyof SettingsSchema;
