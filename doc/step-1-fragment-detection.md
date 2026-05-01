@@ -4,7 +4,9 @@
 
 Build the domain layer that finds valid JSON object and array fragments inside arbitrary text.
 
-This step should not depend on VS Code APIs. The result should be reusable by highlighting, hover previews, static preview tabs, and dynamic preview tabs.
+This step may use VS Code text model types such as line, position, and range because the extension integrates directly with VS Code documents. It should not depend on editor lifecycle, commands, decorations, hover providers, or other UI APIs.
+
+The result should be reusable by highlighting, hover previews, static preview tabs, and dynamic preview tabs.
 
 Scanner implementation should live in `src/scanner`. Domain types that are shared with the rest of the extension can stay in `src/domain`.
 
@@ -12,8 +14,9 @@ Scanner implementation should live in `src/scanner`. Domain types that are share
 
 Implement detection for:
 
-- a single line of text;
-- a text block with a known starting line and character offset;
+- a plain string without source position metadata;
+- a single document line;
+- a text block with known source position metadata for future multiline support;
 - JSON objects starting with `{` and arrays starting with `[`;
 - nested objects and arrays;
 - strings with escaped quotes and escaped characters.
@@ -24,11 +27,11 @@ Ignore:
 - incomplete fragments;
 - primitive standalone values such as strings, numbers, booleans, and `null`;
 - primitive-only arrays when `includePrimitiveArrays` is disabled;
-- JSON serialized inside string values.
+- escaped JSON serialized inside valid JSON string values.
 
 ## Serialized JSON Strings
 
-JSON fragments can appear inside serialized JSON strings, but this is out of scope for the MVP.
+JSON fragments can appear inside serialized JSON strings, but recursive deserialization is out of scope for the MVP.
 
 Example:
 
@@ -41,6 +44,16 @@ Example:
 In this case the scanner should find only the outer object. The `payload` field remains a regular string value.
 
 Do not recursively deserialize string values in the first implementation.
+
+There is a separate supported case: raw JSON wrapped in plain quotes inside arbitrary text.
+
+Example:
+
+```text
+"{"type":"signal","payload":{"signal":"main_menu","payload":null,"searchParams":""}}"
+```
+
+The scanner should recognize the inner JSON object as a source fragment. The fragment range and raw text should cover the JSON object itself, not the outer wrapping quotes.
 
 Future setting:
 
@@ -56,17 +69,42 @@ The MVP behaves as if `deserializationDepth` is always `0`. If this feature is a
 
 The scanner should live in `src/scanner`.
 
-Possible public functions:
+The scanner should expose several methods because different VS Code flows naturally provide different input shapes.
 
-- `scanLine(text, line, options): Fragment[]`;
-- `scanText(text, startLine, startCharacter, options): Fragment[]`;
-- `formatFragment(value): string`.
+MVP methods:
+
+- `scanString(value): ScanResult`;
+- `scanLine(line): ScanResult`;
+- `format(value): string`.
+
+Future method:
+
+- `scanText(text, startPosition): ScanResult`.
+
+`scanString` is the smallest primitive. It scans only the passed string and returns ranges relative to the string itself, starting at line `0`, character `0`.
+
+`scanLine` is the document-line helper. It should accept the line entity that comes directly from VS Code document APIs, so the scanner can return ranges already aligned to the source document line.
+
+`scanText` is reserved for future selection and multiline scanning. It should scan a multiline string and use the provided start position to map fragment ranges back to the source document.
+
+The MVP should focus on implementing and testing `scanString` and `scanLine`. Selection and multiline scanning are not required for the first feature.
 
 Possible options:
 
 - `includePrimitiveArrays: boolean`;
 - `maxInputLength: number`;
 - `maxFragmentLength: number`.
+
+Proposed result shape:
+
+- `Fragment.kind`: `"source"`;
+- `Fragment.range`: source range, preferably represented with VS Code `Range`;
+- `Fragment.raw`: raw JSON text;
+- `Fragment.value`: parsed JSON value.
+
+`scanString` should return ranges in local coordinates. The first character of the passed string is `0:0`.
+
+`scanLine` should return ranges in document coordinates. The line number should come from the VS Code line entity, and fragment characters should be mapped into that line.
 
 ## Fragment Shape
 
@@ -75,8 +113,7 @@ Reuse and extend the existing `Fragment` type if needed.
 The domain result should include:
 
 - source URI when available at integration level, but not from the scanner itself;
-- start line and character;
-- end line and character;
+- source range;
 - raw JSON text;
 - parsed JSON value.
 
@@ -145,9 +182,10 @@ Cover at least:
 - escaped quotes inside strings;
 - invalid JSON-like text;
 - incomplete JSON at end of line;
-- multiline object in selected text;
+- multiline object in selected text as a future `scanText` case;
 - primitive-only array enabled and disabled;
 - serialized JSON string remains a string value;
+- raw JSON object wrapped in plain quotes is detected;
 - internal object inside an outer object is not returned separately;
 - internal objects inside an outer array are not returned separately.
 
