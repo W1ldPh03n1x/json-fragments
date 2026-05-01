@@ -10,6 +10,7 @@ export type SettingsSchema = {
   "files.filterMode": FileFilterMode;
   "files.include": string[];
   "files.exclude": string[];
+  "preview.maxOpenStaticPreviews": number;
   "tracker.autoHighlightVisibleRanges": boolean;
   "tracker.autoHighlightDebounceMs": number;
   "tracker.viewportLookaheadRatio": number;
@@ -22,6 +23,7 @@ export const settingsDefaults: SettingsSchema = {
   "files.filterMode": "exclude",
   "files.include": [],
   "files.exclude": [],
+  "preview.maxOpenStaticPreviews": -1,
   "tracker.autoHighlightVisibleRanges": false,
   "tracker.autoHighlightDebounceMs": 100,
   "tracker.viewportLookaheadRatio": 0,
@@ -44,6 +46,9 @@ export type RuntimeSettings = {
     filterMode: FileFilterMode;
     include: string[];
     exclude: string[];
+  };
+  preview: {
+    maxOpenStaticPreviews: number;
   };
   tracker: {
     autoHighlightVisibleRanges: boolean;

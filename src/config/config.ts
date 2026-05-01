@@ -80,6 +80,12 @@ export function readRuntimeSettings(configuration: ConfigurationReader): Runtime
       include: readSetting(configuration, "files.include"),
       exclude: readSetting(configuration, "files.exclude"),
     },
+    preview: {
+      maxOpenStaticPreviews: readSetting(
+        configuration,
+        "preview.maxOpenStaticPreviews",
+      ),
+    },
     tracker: {
       autoHighlightVisibleRanges: readSetting(
         configuration,
@@ -115,6 +121,8 @@ function getRuntimeSetting<Key extends SettingsKey>(
       return settings.files.include as SettingsValue<Key>;
     case "files.exclude":
       return settings.files.exclude as SettingsValue<Key>;
+    case "preview.maxOpenStaticPreviews":
+      return settings.preview.maxOpenStaticPreviews as SettingsValue<Key>;
     case "tracker.autoHighlightVisibleRanges":
       return settings.tracker.autoHighlightVisibleRanges as SettingsValue<Key>;
     case "tracker.autoHighlightDebounceMs":

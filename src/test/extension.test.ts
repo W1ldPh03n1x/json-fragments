@@ -3,6 +3,12 @@ import * as vscode from "vscode";
 
 import { Config, isFileAllowed, readRuntimeSettings } from "../config";
 import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
+import {
+  StaticPreviewContentProvider,
+  StaticPreviewDefinitionProvider,
+  StaticPreviewRegistry,
+  type OpenStaticPreviewArgs,
+} from "../preview";
 import { createScanner, type Fragment, type ScannerOptions } from "../scanner";
 import { Store } from "../store";
 
@@ -309,6 +315,7 @@ suite("Config", () => {
       ["files.filterMode", "include"],
       ["files.include", ["**/*.log"]],
       ["files.exclude", ["dev/examples/**"]],
+      ["preview.maxOpenStaticPreviews", 3],
       ["tracker.autoHighlightVisibleRanges", true],
       ["tracker.autoHighlightDebounceMs", 250],
       ["tracker.viewportLookaheadRatio", 0.5],
@@ -335,12 +342,175 @@ suite("Config", () => {
         include: ["**/*.log"],
         exclude: ["dev/examples/**"],
       },
+      preview: {
+        maxOpenStaticPreviews: 3,
+      },
       tracker: {
         autoHighlightVisibleRanges: true,
         autoHighlightDebounceMs: 250,
         viewportLookaheadRatio: 0.5,
       },
     });
+  });
+});
+
+suite("StaticPreviewRegistry", () => {
+  test("reuses a preview for the same source identity", () => {
+    const registry = new StaticPreviewRegistry();
+    const identity = createPreviewIdentity("file:///source.log", 1, 0, 5, 0, 16);
+    const first = registry.register(identity, "{\n  \"ok\": true\n}", -1);
+    const second = registry.register(identity, "{\n  \"ok\": true\n}", -1);
+
+    assert.strictEqual(first.kind, "created");
+    assert.strictEqual(second.kind, "existing");
+
+    assert.strictEqual(first.preview.uri.toString(), second.preview.uri.toString());
+
+    assert.strictEqual(registry.size, 1);
+    registry.dispose();
+  });
+
+  test("creates separate previews for the same JSON in different source ranges", () => {
+    const registry = new StaticPreviewRegistry();
+    const first = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 0, 5, 0, 16),
+      "{\n  \"ok\": true\n}",
+      -1,
+    );
+    const second = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 1, 5, 1, 16),
+      "{\n  \"ok\": true\n}",
+      -1,
+    );
+
+    assert.strictEqual(first.kind, "created");
+    assert.strictEqual(second.kind, "created");
+    assert.strictEqual(registry.size, 2);
+    registry.dispose();
+  });
+
+  test("does not create new previews when the max is zero", () => {
+    const registry = new StaticPreviewRegistry();
+    const result = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 0, 5, 0, 16),
+      "{}",
+      0,
+    );
+
+    assert.strictEqual(result.kind, "blocked");
+    assert.strictEqual(registry.size, 0);
+    registry.dispose();
+  });
+
+  test("evicts the oldest preview when the max is reached", () => {
+    const registry = new StaticPreviewRegistry();
+    const first = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 0, 5, 0, 16),
+      "{\"first\":true}",
+      1,
+    );
+    const second = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 1, 5, 1, 17),
+      "{\"second\":true}",
+      1,
+    );
+
+    assert.strictEqual(first.kind, "created");
+    assert.strictEqual(second.kind, "created");
+    assert.strictEqual(second.evicted.length, 1);
+    assert.strictEqual(registry.size, 1);
+
+    assert.strictEqual(registry.getContent(first.preview.uri), undefined);
+
+    registry.dispose();
+  });
+
+  test("content provider returns registered preview content", async () => {
+    const registry = new StaticPreviewRegistry();
+    const provider = new StaticPreviewContentProvider(createConfig(), registry);
+    const result = registry.register(
+      createPreviewIdentity("file:///source.log", 1, 0, 5, 0, 16),
+      "{\n  \"ok\": true\n}",
+      -1,
+    );
+
+    assert.notStrictEqual(result.kind, "blocked");
+
+    if (result.kind !== "blocked") {
+      assert.strictEqual(
+        await provider.provideTextDocumentContent(result.preview.uri),
+        "{\n  \"ok\": true\n}",
+      );
+      assert.ok(result.preview.uri.path.includes("source.log:1:6.json"));
+    }
+
+    registry.dispose();
+  });
+});
+
+suite("StaticPreviewDefinitionProvider", () => {
+  test("creates a definition link for a cached fragment under the position", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///links.log", 7, 'INFO {"ok":true}');
+    const fragment = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments[0];
+
+    store.setSnapshot({
+      uri: document.uri,
+      version: document.version,
+      scannedRanges: [document.lineAt(0).range],
+      fragments: [fragment],
+    });
+
+    const links = new StaticPreviewDefinitionProvider(
+      createConfig(),
+      store,
+    ).provideDefinition(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assert.ok(Array.isArray(links));
+    assert.strictEqual(links.length, 1);
+    assert.strictEqual(links[0].targetUri.scheme, "json-fragments-preview");
+    assert.ok(links[0].targetUri.path.includes("links.log:1:6.json"));
+    assert.ok(links[0].originSelectionRange?.isEqual(fragment.range));
+
+    store.dispose();
+  });
+
+  test("does not create definition links for excluded files", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///excluded.log", 1, 'INFO {"ok":true}');
+    const links = new StaticPreviewDefinitionProvider(
+      createConfig({
+        documentAllowed: false,
+      }),
+      store,
+    ).provideDefinition(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assert.strictEqual(links, undefined);
+    store.dispose();
+  });
+
+  test("does not create definition links outside a fragment", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///outside.log", 1, 'INFO {"ok":true}');
+    const links = new StaticPreviewDefinitionProvider(
+      createConfig(),
+      store,
+    ).provideDefinition(
+      document,
+      new vscode.Position(0, 1),
+      createCancellationToken(false),
+    );
+
+    assert.strictEqual(links, undefined);
+    store.dispose();
   });
 });
 
@@ -435,6 +605,7 @@ function createProvider(
 function createConfig(options: {
   hoverEnabled?: boolean;
   documentAllowed?: boolean;
+  maxOpenStaticPreviews?: number;
 } = {}): Config {
   return ({
     scannerOptions: {
@@ -446,11 +617,34 @@ function createConfig(options: {
         return options.hoverEnabled ?? true;
       }
 
+      if (key === "preview.maxOpenStaticPreviews") {
+        return options.maxOpenStaticPreviews ?? -1;
+      }
+
       throw new Error(`Unexpected setting key: ${key}`);
     },
     isDocumentAllowed: () => options.documentAllowed ?? true,
   } as unknown) as Config;
 }
+
+function createPreviewIdentity(
+  sourceUri: string,
+  sourceVersion: number,
+  startLine: number,
+  startCharacter: number,
+  endLine: number,
+  endCharacter: number,
+): OpenStaticPreviewArgs {
+  return {
+    sourceUri,
+    sourceVersion,
+    range: {
+      start: { line: startLine, character: startCharacter },
+      end: { line: endLine, character: endCharacter },
+    },
+  };
+}
+
 
 function createTextDocument(
   uri: string,

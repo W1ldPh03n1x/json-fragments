@@ -71,6 +71,7 @@ Settings should control optional behavior:
 - include primitive-only arrays if needed;
 - include empty objects if needed;
 - include or exclude files by glob patterns;
+- configure maximum open static preview tabs;
 - configure debounce for automatic scanning.
 
 Future settings should control:
@@ -137,19 +138,23 @@ Known limitations:
 
 ### 4. Ctrl-Click Static Preview
 
-Status: next planned feature.
+Status: first working implementation exists.
 
-Add document-link or definition-style interaction for fragments.
+Add definition-style interaction for fragments.
 
-Expected result:
+Current result:
 
 - when the user holds `Ctrl`, VS Code indicates that a fragment is clickable;
 - `Ctrl+Click` opens the clicked fragment in a new read-only tab;
 - the opened tab contains formatted JSON and does not update after opening.
+- the `json-fragments.openStaticPreview` command opens the fragment under the cursor, or the first fragment on the current line;
+- repeated opening of the same source URI, document version, and range reveals the existing preview;
+- `json-fragments.preview.maxOpenStaticPreviews` limits open static previews, with `-1` meaning unlimited.
 
-Preferred MVP approach:
+Current approach:
 
 - use a virtual text document through `TextDocumentContentProvider`;
+- use `DefinitionProvider` for Ctrl-hover and Ctrl-click affordance;
 - use a custom URI scheme for fragment preview documents;
 - open the preview as JSON text where VS Code can provide native editor behavior;
 - reuse the same fragment lookup and formatter behavior as hover.
@@ -206,6 +211,7 @@ Remaining:
 - `src/store`: per-document fragment snapshots and change events.
 - `src/highlight`: decoration presentation and rendering.
 - `src/hover`: hover provider and Markdown hover content builder.
+- `src/preview`: static preview definitions, command handling, virtual documents, and registry.
 - `src/tracking`: VS Code event orchestration for scans.
 - `src/extension.ts`: activation, object construction, command registration.
 
@@ -218,11 +224,10 @@ Remaining:
 - `src/tracking`: scan orchestration.
 - `src/hover`: hover provider and content builder.
 - `src/editor`: document links and editor-specific integrations that do not fit highlight or hover.
-- `src/preview`: static and dynamic preview document providers or webviews.
+- `src/preview`: dynamic preview document providers or webviews.
 
 ## Open Decisions
 
-- Whether static preview should use a virtual text document or a webview.
 - Whether dynamic preview should be a virtual document, a webview, or a custom editor.
 - Whether current scanner limits should become user-facing settings.
 - How detailed inline fragment syntax highlighting should be, given that it has to work inside arbitrary source files.

@@ -35,6 +35,10 @@
       {
         "command": "json-fragments.toggleTemporaryHighlightForFocusedFiles",
         "title": "JSON Fragments: Toggle Temporary Highlight for Focused Files"
+      },
+      {
+        "command": "json-fragments.openStaticPreview",
+        "title": "JSON Fragments: Open Static Preview"
       }
     ],
     "configuration": {
@@ -79,6 +83,12 @@
           },
           "default": [],
           "description": "Glob patterns for files where the extension is inactive. Excludes always take priority over includes."
+        },
+        "json-fragments.preview.maxOpenStaticPreviews": {
+          "type": "number",
+          "default": -1,
+          "minimum": -1,
+          "description": "Maximum number of open static preview tabs. -1 means unlimited, 0 prevents opening new previews."
         },
         "json-fragments.tracker.autoHighlightVisibleRanges": {
           "type": "boolean",
