@@ -1,15 +1,27 @@
 
 export const section = "json-fragments";
 
+export type FileFilterMode = "exclude" | "include";
+
 export type SettingsSchema = {
+  "hover.enabled": boolean;
   "scanner.includePrimitiveArrays": boolean;
+  "scanner.includeEmptyObjects": boolean;
+  "files.filterMode": FileFilterMode;
+  "files.include": string[];
+  "files.exclude": string[];
   "tracker.autoHighlightVisibleRanges": boolean;
   "tracker.autoHighlightDebounceMs": number;
   "tracker.viewportLookaheadRatio": number;
 };
 
 export const settingsDefaults: SettingsSchema = {
+  "hover.enabled": true,
   "scanner.includePrimitiveArrays": false,
+  "scanner.includeEmptyObjects": true,
+  "files.filterMode": "exclude",
+  "files.include": [],
+  "files.exclude": [],
   "tracker.autoHighlightVisibleRanges": false,
   "tracker.autoHighlightDebounceMs": 100,
   "tracker.viewportLookaheadRatio": 0,
@@ -21,8 +33,17 @@ export type SettingsValue<Key extends SettingsKey> = SettingsSchema[Key];
 export const settingKeys = createSettingKeys(section, settingsDefaults);
 
 export type RuntimeSettings = {
+  hover: {
+    enabled: boolean;
+  };
   scanner: {
     includePrimitiveArrays: boolean;
+    includeEmptyObjects: boolean;
+  };
+  files: {
+    filterMode: FileFilterMode;
+    include: string[];
+    exclude: string[];
   };
   tracker: {
     autoHighlightVisibleRanges: boolean;

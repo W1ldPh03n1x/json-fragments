@@ -1,13 +1,14 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
-import { Config, readRuntimeSettings } from "../config";
+import { Config, isFileAllowed, readRuntimeSettings } from "../config";
 import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
 import { createScanner, type Fragment, type ScannerOptions } from "../scanner";
 import { Store } from "../store";
 
 const defaultOptions: ScannerOptions = {
   includePrimitiveArrays: false,
+  includeEmptyObjects: true,
   maxInputLength: 10_000,
   maxFragmentLength: 5_000,
   maxFragments: 100,
@@ -46,6 +47,24 @@ suite("Scanner.scanString", () => {
     assert.strictEqual(result.fragments.length, 2);
     assert.strictEqual(result.fragments[0].raw, '{"ok":true}');
     assert.strictEqual(result.fragments[1].raw, '{"id":1}');
+  });
+
+  test("finds empty objects by default", () => {
+    const result = createScanner(defaultOptions).scanString("INFO empty={}");
+
+    assert.strictEqual(result.fragments.length, 1);
+    assert.strictEqual(result.fragments[0].raw, "{}");
+    assert.deepStrictEqual(result.fragments[0].value, {});
+  });
+
+  test("ignores empty objects when disabled", () => {
+    const result = createScanner({
+      ...defaultOptions,
+      includeEmptyObjects: false,
+    }).scanString('INFO empty={} value={"ok":true}');
+
+    assert.strictEqual(result.fragments.length, 1);
+    assert.strictEqual(result.fragments[0].raw, '{"ok":true}');
   });
 
   test("ignores invalid JSON candidates", () => {
@@ -226,6 +245,36 @@ suite("FragmentHoverProvider", () => {
     store.dispose();
   });
 
+  test("does not render hover when disabled", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///hover-disabled.log", 1, 'INFO {"ok":true}');
+    const hover = createProvider(store, {
+      hoverEnabled: false,
+    }).provideHover(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assert.strictEqual(hover, undefined);
+    store.dispose();
+  });
+
+  test("does not render hover for excluded files", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///excluded.log", 1, 'INFO {"ok":true}');
+    const hover = createProvider(store, {
+      documentAllowed: false,
+    }).provideHover(
+      document,
+      new vscode.Position(0, 8),
+      createCancellationToken(false),
+    );
+
+    assert.strictEqual(hover, undefined);
+    store.dispose();
+  });
+
   test("ignores stale store snapshot and scans the hovered line", () => {
     const store = new Store<Fragment>();
     const document = createTextDocument("file:///stale.log", 2, 'INFO {"fresh":true}');
@@ -254,7 +303,12 @@ suite("FragmentHoverProvider", () => {
 suite("Config", () => {
   test("reads domain-scoped settings and builds scanner options", () => {
     const values = new Map<string, unknown>([
+      ["hover.enabled", false],
       ["scanner.includePrimitiveArrays", true],
+      ["scanner.includeEmptyObjects", false],
+      ["files.filterMode", "include"],
+      ["files.include", ["**/*.log"]],
+      ["files.exclude", ["dev/examples/**"]],
       ["tracker.autoHighlightVisibleRanges", true],
       ["tracker.autoHighlightDebounceMs", 250],
       ["tracker.viewportLookaheadRatio", 0.5],
@@ -269,8 +323,17 @@ suite("Config", () => {
     const settings = readRuntimeSettings({ get });
 
     assert.deepStrictEqual(settings, {
+      hover: {
+        enabled: false,
+      },
       scanner: {
         includePrimitiveArrays: true,
+        includeEmptyObjects: false,
+      },
+      files: {
+        filterMode: "include",
+        include: ["**/*.log"],
+        exclude: ["dev/examples/**"],
       },
       tracker: {
         autoHighlightVisibleRanges: true,
@@ -278,6 +341,58 @@ suite("Config", () => {
         viewportLookaheadRatio: 0.5,
       },
     });
+  });
+});
+
+suite("File filters", () => {
+  test("exclude mode allows files unless they match exclude patterns", () => {
+    assert.strictEqual(isFileAllowed("src/extension.ts", {
+      filterMode: "exclude",
+      include: [],
+      exclude: ["dev/examples/**"],
+    }), true);
+    assert.strictEqual(isFileAllowed("dev/examples/20260429.BigBrother", {
+      filterMode: "exclude",
+      include: [],
+      exclude: ["dev/examples/**"],
+    }), false);
+  });
+
+  test("include mode allows only matching include patterns", () => {
+    assert.strictEqual(isFileAllowed("logs/app.log", {
+      filterMode: "include",
+      include: ["**/*.log"],
+      exclude: [],
+    }), true);
+    assert.strictEqual(isFileAllowed("src/extension.ts", {
+      filterMode: "include",
+      include: ["**/*.log"],
+      exclude: [],
+    }), false);
+  });
+
+  test("exclude patterns take priority over include patterns", () => {
+    assert.strictEqual(isFileAllowed("logs/private/app.log", {
+      filterMode: "include",
+      include: ["**/*.log"],
+      exclude: ["logs/private/**"],
+    }), false);
+  });
+
+  test("matches glob paths with slash-normalized input", () => {
+    assert.strictEqual(isFileAllowed("dev\\examples\\20260429.BigBrother", {
+      filterMode: "exclude",
+      include: [],
+      exclude: ["**/*.BigBrother"],
+    }), false);
+  });
+
+  test("allows documents without a comparable file path", () => {
+    assert.strictEqual(isFileAllowed(undefined, {
+      filterMode: "include",
+      include: [],
+      exclude: [],
+    }), true);
   });
 });
 
@@ -307,16 +422,34 @@ function createTextLine(lineNumber: number, text: string): vscode.TextLine {
   };
 }
 
-function createProvider(store: Store<Fragment>): FragmentHoverProvider {
-  return new FragmentHoverProvider(createConfig(), store);
+function createProvider(
+  store: Store<Fragment>,
+  options: {
+    hoverEnabled?: boolean;
+    documentAllowed?: boolean;
+  } = {},
+): FragmentHoverProvider {
+  return new FragmentHoverProvider(createConfig(options), store);
 }
 
-function createConfig(): Config {
-  return {
+function createConfig(options: {
+  hoverEnabled?: boolean;
+  documentAllowed?: boolean;
+} = {}): Config {
+  return ({
     scannerOptions: {
       includePrimitiveArrays: defaultOptions.includePrimitiveArrays,
+      includeEmptyObjects: defaultOptions.includeEmptyObjects,
     },
-  } as Config;
+    get: (key: string) => {
+      if (key === "hover.enabled") {
+        return options.hoverEnabled ?? true;
+      }
+
+      throw new Error(`Unexpected setting key: ${key}`);
+    },
+    isDocumentAllowed: () => options.documentAllowed ?? true,
+  } as unknown) as Config;
 }
 
 function createTextDocument(

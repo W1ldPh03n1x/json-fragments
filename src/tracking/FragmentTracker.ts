@@ -45,6 +45,11 @@ export class FragmentTracker implements vscode.Disposable {
             }),
             this.config.onDidChange(() => {
                 for (const editor of vscode.window.visibleTextEditors) {
+                    if (!this.config.isDocumentAllowed(editor.document)) {
+                        this.disableDocument(editor.document.uri);
+                        continue;
+                    }
+
                     this.scheduleScanEditorIfTracked(editor);
                 }
             }),
@@ -55,6 +60,11 @@ export class FragmentTracker implements vscode.Disposable {
         const editor = vscode.window.activeTextEditor;
 
         if (editor === undefined) {
+            return;
+        }
+
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableDocument(editor.document.uri);
             return;
         }
 
@@ -72,6 +82,11 @@ export class FragmentTracker implements vscode.Disposable {
         const editor = vscode.window.activeTextEditor;
 
         if (editor !== undefined) {
+            if (!this.config.isDocumentAllowed(editor.document)) {
+                this.disableDocument(editor.document.uri);
+                return;
+            }
+
             this.scanEditor(editor);
         }
     }
@@ -107,6 +122,11 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private enableEditor(editor: vscode.TextEditor): void {
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableDocument(editor.document.uri);
+            return;
+        }
+
         this.trackedDocuments.add(createUriKey(editor.document.uri));
         this.scheduleScanEditor(editor);
     }
@@ -128,11 +148,21 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private shouldTrackEditor(editor: vscode.TextEditor): boolean {
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableDocument(editor.document.uri);
+            return false;
+        }
+
         return this.config.get("tracker.autoHighlightVisibleRanges") ||
             this.trackedDocuments.has(createUriKey(editor.document.uri));
     }
 
     private scheduleScanEditor(editor: vscode.TextEditor): void {
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableDocument(editor.document.uri);
+            return;
+        }
+
         const key = createUriKey(editor.document.uri);
         const version = editor.document.version;
         const debounceMs = this.config.get("tracker.autoHighlightDebounceMs");
@@ -150,6 +180,11 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private scanEditor(editor: vscode.TextEditor): void {
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableDocument(editor.document.uri);
+            return;
+        }
+
         const scanner = createScanner({
             ...this.config.scannerOptions,
             ...scannerLimits,

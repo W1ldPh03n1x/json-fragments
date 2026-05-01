@@ -24,6 +24,10 @@ export class FragmentHoverProvider implements vscode.HoverProvider {
       return undefined;
     }
 
+    if (!this.config.get("hover.enabled") || !this.config.isDocumentAllowed(document)) {
+      return undefined;
+    }
+
     const scanner = createScanner({
       ...this.config.scannerOptions,
       ...scannerLimits,

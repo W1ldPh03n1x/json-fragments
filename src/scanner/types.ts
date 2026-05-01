@@ -22,6 +22,7 @@ export type ScanResult = {
 
 export type ScannerOptions = {
   includePrimitiveArrays: boolean;
+  includeEmptyObjects: boolean;
   maxInputLength: number;
   maxFragmentLength: number;
   maxFragments: number;

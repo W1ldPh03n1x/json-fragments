@@ -77,7 +77,8 @@ export class Scanner implements ScannerApi {
       return this.options.includePrimitiveArrays || hasNonPrimitiveItem(value);
     }
 
-    return isJsonObject(value);
+    return isJsonObject(value) &&
+      (this.options.includeEmptyObjects || Object.keys(value).length > 0);
   }
 }
 

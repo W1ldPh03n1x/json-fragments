@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import {
   section,
   settingsDefaults,
@@ -6,6 +7,7 @@ import {
   type SettingsKey,
   type SettingsValue,
 } from "./settings";
+import { isFileAllowed } from "./fileFilter";
 
 type ConfigurationReader = Pick<vscode.WorkspaceConfiguration, "get">;
 
@@ -40,7 +42,12 @@ export class Config implements vscode.Disposable {
   public get scannerOptions(): RuntimeSettings["scanner"] {
     return {
       includePrimitiveArrays: this.settings.scanner.includePrimitiveArrays,
+      includeEmptyObjects: this.settings.scanner.includeEmptyObjects,
     };
+  }
+
+  public isDocumentAllowed(document: vscode.TextDocument): boolean {
+    return isFileAllowed(getDocumentFilterPath(document), this.settings.files);
   }
 
   public refresh(): RuntimeSettings {
@@ -61,8 +68,17 @@ export class Config implements vscode.Disposable {
 
 export function readRuntimeSettings(configuration: ConfigurationReader): RuntimeSettings {
   return {
+    hover: {
+      enabled: readSetting(configuration, "hover.enabled"),
+    },
     scanner: {
       includePrimitiveArrays: readSetting(configuration, "scanner.includePrimitiveArrays"),
+      includeEmptyObjects: readSetting(configuration, "scanner.includeEmptyObjects"),
+    },
+    files: {
+      filterMode: readSetting(configuration, "files.filterMode"),
+      include: readSetting(configuration, "files.include"),
+      exclude: readSetting(configuration, "files.exclude"),
     },
     tracker: {
       autoHighlightVisibleRanges: readSetting(
@@ -87,8 +103,18 @@ function getRuntimeSetting<Key extends SettingsKey>(
   key: Key,
 ): SettingsValue<Key> {
   switch (key) {
+    case "hover.enabled":
+      return settings.hover.enabled as SettingsValue<Key>;
     case "scanner.includePrimitiveArrays":
       return settings.scanner.includePrimitiveArrays as SettingsValue<Key>;
+    case "scanner.includeEmptyObjects":
+      return settings.scanner.includeEmptyObjects as SettingsValue<Key>;
+    case "files.filterMode":
+      return settings.files.filterMode as SettingsValue<Key>;
+    case "files.include":
+      return settings.files.include as SettingsValue<Key>;
+    case "files.exclude":
+      return settings.files.exclude as SettingsValue<Key>;
     case "tracker.autoHighlightVisibleRanges":
       return settings.tracker.autoHighlightVisibleRanges as SettingsValue<Key>;
     case "tracker.autoHighlightDebounceMs":
@@ -96,4 +122,18 @@ function getRuntimeSetting<Key extends SettingsKey>(
     case "tracker.viewportLookaheadRatio":
       return settings.tracker.viewportLookaheadRatio as SettingsValue<Key>;
   }
+}
+
+function getDocumentFilterPath(document: vscode.TextDocument): string | undefined {
+  if (document.uri.scheme !== "file") {
+    return undefined;
+  }
+
+  const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+
+  if (workspaceFolder === undefined) {
+    return document.uri.fsPath;
+  }
+
+  return path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
 }

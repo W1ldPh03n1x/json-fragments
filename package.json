@@ -40,10 +40,45 @@
     "configuration": {
       "title": "JSON Fragments",
       "properties": {
+        "json-fragments.hover.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a formatted JSON preview when hovering over a detected JSON fragment."
+        },
         "json-fragments.scanner.includePrimitiveArrays": {
           "type": "boolean",
           "default": false,
           "description": "Treat empty arrays and arrays containing only primitive values as JSON fragments."
+        },
+        "json-fragments.scanner.includeEmptyObjects": {
+          "type": "boolean",
+          "default": true,
+          "description": "Treat empty objects such as {} as JSON fragments."
+        },
+        "json-fragments.files.filterMode": {
+          "type": "string",
+          "enum": [
+            "exclude",
+            "include"
+          ],
+          "default": "exclude",
+          "description": "Choose how file include and exclude glob patterns control where the extension is active."
+        },
+        "json-fragments.files.include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for files where the extension is active when filter mode is include. Examples: **/*.log, dev/examples/**."
+        },
+        "json-fragments.files.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for files where the extension is inactive. Excludes always take priority over includes."
         },
         "json-fragments.tracker.autoHighlightVisibleRanges": {
           "type": "boolean",
