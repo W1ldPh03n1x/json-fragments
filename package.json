@@ -44,6 +44,12 @@
           "type": "boolean",
           "default": false,
           "description": "Treat empty arrays and arrays containing only primitive values as JSON fragments."
+        },
+        "json-fragments.autoHighlightDebounceMs": {
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "description": "Delay in milliseconds before rescanning visible ranges after editor and document events."
         }
       }
     }

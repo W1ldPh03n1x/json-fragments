@@ -1,5 +1,11 @@
 # FragmentTracker
 
+## Current Status
+
+`FragmentTracker` is implemented in `src/tracking/FragmentTracker.ts`.
+
+It is currently used by extension activation for inline highlighting and manual visible-range scans.
+
 ## Responsibility
 
 `FragmentTracker` coordinates fragment state for source documents.
@@ -37,19 +43,26 @@ It does not render highlights directly. Rendering stays in `HighlightPresenter`,
 
 ## State
 
-`FragmentTracker` should keep only coordination state:
+`FragmentTracker` keeps only coordination state:
 
 - tracked document URIs;
 - temporary tracking mode state;
 - pending debounce timers per document;
-- latest scheduled scan version per document;
 - disposable event subscriptions.
+
+The scheduled document version is captured in each pending scan callback and checked before the scan commits.
 
 The canonical fragment list remains in `Store`.
 
 ## Scan Scope
 
-For inline highlighting, the first implementation should scan visible ranges only.
+For inline highlighting, the current implementation scans visible ranges only.
+
+Visible ranges are expanded to line numbers and each line is scanned independently with `scanner.scanLine(...)`.
+
+Current limitation:
+
+- multiline fragments are not detected by the tracker because scanning is currently line-based.
 
 Future scan scopes:
 
@@ -63,9 +76,11 @@ Future scan scopes:
 ### Activate
 
 1. Create `FragmentTracker` in extension activation.
-2. Pass `Scanner`, `Store`, and `Config` to it.
+2. Pass `Config` and `Store` to it.
 3. Register it in `context.subscriptions`.
 4. Register commands that call tracker methods.
+
+`FragmentTracker` creates scanner instances internally when it scans. Scanner options are built from runtime settings plus `scannerLimits` from `src/config/constants.ts`.
 
 ### Enable Document Tracking
 
@@ -82,10 +97,11 @@ Future scan scopes:
 
 ### Document Change
 
-1. Check whether the changed document is tracked.
-2. Cancel any pending scan for the document.
-3. Schedule a new scan with debounce.
-4. Ignore stale scan results if the document version changed before commit.
+1. Find visible editors for the changed document.
+2. Check whether each editor should be tracked.
+3. Cancel any pending scan for the document.
+4. Schedule a new scan with debounce.
+5. Ignore stale scan results if the document version changed before commit.
 
 ### Visible Range Change
 
@@ -107,17 +123,18 @@ Future scan scopes:
 
 ## Public API Sketch
 
+Current public API:
+
 ```ts
 class FragmentTracker implements vscode.Disposable {
-  enableForDocument(document: vscode.TextDocument): void;
-  disableForDocument(uri: vscode.Uri): void;
-  toggleForDocument(document: vscode.TextDocument): void;
-  enableTemporaryFocusedTracking(): void;
-  disableTemporaryFocusedTracking(): void;
-  rescanEditor(editor: vscode.TextEditor): void;
+  toggleActiveEditor(): void;
+  scanActiveEditor(): void;
+  toggleTemporaryFocusedTracking(): void;
   dispose(): void;
 }
 ```
+
+Lower-level enable, disable, schedule, and scan methods are private implementation details for now.
 
 ## Event Flow
 
@@ -142,9 +159,38 @@ TextDecorator
 
 ## Placement
 
-Suggested module:
+Current module:
 
 - `src/tracking/FragmentTracker.ts`
 - `src/tracking/index.ts`
 
 `FragmentTracker` can use VS Code APIs because it is an integration layer. Scanner logic should remain independent from editor lifecycle and presentation concerns.
+
+## Current Commands
+
+`FragmentTracker` is wired to:
+
+- `json-fragments.scanVisibleJsonFragments`: scan visible ranges in the active editor once.
+- `json-fragments.toggleHighlightForFile`: toggle tracking for the active editor document.
+- `json-fragments.toggleTemporaryHighlightForFocusedFiles`: toggle tracking that follows the focused editor.
+
+`json-fragments.openLineJsonFragmentsPreview` is registered in `package.json` but is not wired yet.
+
+## Current Settings
+
+- `json-fragments.autoHighlightVisibleRanges`: when enabled, visible editors are scanned without manual per-file tracking.
+- `json-fragments.includePrimitiveArrays`: passed to scanner options.
+- `json-fragments.autoHighlightDebounceMs`: controls delayed rescans after editor and document events.
+
+## Current Data Flow
+
+```text
+VS Code event / command
+  -> FragmentTracker
+  -> Scanner.scanLine(...)
+  -> Store.setSnapshot(...) / Store.clearDocument(...)
+  -> Store.onDidChangeFragments
+  -> HighlightPresenter
+  -> TextDecorator
+  -> editor.setDecorations(...)
+```

@@ -1,5 +1,24 @@
 # Step 1: Fragment Detection
 
+## Current Status
+
+Implemented in `src/scanner`.
+
+Current public API:
+
+- `scanString(value): ScanResult`;
+- `scanLine(line): ScanResult`;
+- `format(value): string`.
+
+Current options:
+
+- `includePrimitiveArrays`;
+- `maxInputLength`;
+- `maxFragmentLength`;
+- `maxFragments`.
+
+`scanText(text, startPosition)` is still future work.
+
 ## Purpose
 
 Build the domain layer that finds valid JSON object and array fragments inside arbitrary text.
@@ -12,14 +31,17 @@ Scanner implementation should live in `src/scanner`. Domain types that are share
 
 ## Scope
 
-Implement detection for:
+Current detection supports:
 
 - a plain string without source position metadata;
 - a single document line;
-- a text block with known source position metadata for future multiline support;
 - JSON objects starting with `{` and arrays starting with `[`;
 - nested objects and arrays;
 - strings with escaped quotes and escaped characters.
+
+Future detection should support:
+
+- a text block with known source position metadata for multiline scanning.
 
 Ignore:
 
@@ -94,6 +116,7 @@ Possible options:
 - `includePrimitiveArrays: boolean`;
 - `maxInputLength: number`;
 - `maxFragmentLength: number`.
+- `maxFragments: number`.
 
 Proposed result shape:
 
@@ -192,7 +215,11 @@ Cover at least:
 ## Done Criteria
 
 - Scanner logic is implemented under `src/scanner`.
-- Public domain exports are exposed through `src/domain/index.ts`.
 - Public scanner exports are exposed through `src/scanner/index.ts`.
 - Unit tests cover the main detection cases.
 - `npm run check-types` and `npm run lint` pass.
+
+Remaining:
+
+- move or consolidate shared fragment types if `src/domain` becomes the canonical domain layer;
+- implement `scanText` when selection and multiline workflows need it.

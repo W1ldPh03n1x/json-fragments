@@ -1,5 +1,25 @@
 # Feature 1: Inline Fragment Highlighting
 
+## Current Status
+
+The first working version is implemented.
+
+Implemented modules:
+
+- `src/tracking/FragmentTracker.ts`: scan orchestration and command-facing behavior.
+- `src/store`: per-document fragment snapshots and change events.
+- `src/highlight/HighlightPresenter.ts`: translates store changes into decoration updates.
+- `src/highlight/TextDecorator.ts`: owns VS Code decoration types and applies ranges.
+- `src/config/constants.ts`: current scanner limits.
+
+Current limitations:
+
+- visible ranges are scanned line by line;
+- multiline fragments are not highlighted yet;
+- viewport lookahead and range hysteresis are not implemented;
+- scan limits are constants, not user settings;
+- `openLineJsonFragmentsPreview` is contributed but not implemented.
+
 ## Purpose
 
 Highlight JSON fragments directly inside the source editor so the user can quickly see which parts of arbitrary text are valid JSON fragments and can be inspected further.
@@ -149,7 +169,8 @@ New settings to consider:
 
 - `src/scanner`: scanner and fragment range model.
 - `src/domain`: shared fragment domain types.
-- `src/editor`: editor decoration rendering, range presentation, viewport scan orchestration.
+- `src/tracking`: viewport scan orchestration.
+- `src/highlight`: editor decoration presentation and rendering.
 - `src/store`: per-document highlighting state and fragment cache.
 - `src/config`: settings access.
 - `src/extension.ts`: command registration and provider wiring.
@@ -164,7 +185,7 @@ Recommended flow:
 
 ```text
 VS Code events
-  -> FragmentScanCoordinator
+  -> FragmentTracker
   -> Scanner
   -> Store
   -> HighlightPresenter
@@ -172,9 +193,9 @@ VS Code events
   -> editor.setDecorations(...)
 ```
 
-### FragmentScanCoordinator
+### FragmentTracker
 
-The scan coordinator owns editor lifecycle orchestration.
+The tracker owns editor lifecycle orchestration.
 
 Responsibilities:
 
@@ -313,11 +334,15 @@ Incremental updates can be considered later only if full snapshot rendering beco
 
 ### 1. Scanner Foundation
 
+Status: implemented.
+
 Implement and test the domain scanner described in `doc/step-1-fragment-detection.md`.
 
 The editor feature should depend on this scanner instead of parsing JSON directly in VS Code integration code.
 
 ### 2. Highlight State and Range Store
+
+Status: implemented as `Store`.
 
 Track per-document state:
 
@@ -331,6 +356,8 @@ Expose range changes through a store event so decoration rendering can update wi
 
 ### 3. Text Decorator
 
+Status: implemented.
+
 Create a small editor rendering integration that:
 
 - owns `TextEditorDecorationType`;
@@ -343,6 +370,10 @@ It should not scan, parse, subscribe to scanner events, or contain hover behavio
 
 ### 4. Viewport Range Builder
 
+Status: partially implemented.
+
+Current behavior converts `editor.visibleRanges` into unique line numbers and scans those lines. It does not merge padded ranges, apply viewport lookahead, or use hysteresis yet.
+
 Create logic that converts `editor.visibleRanges` into scan ranges.
 
 It should:
@@ -354,7 +385,9 @@ It should:
 
 ### 5. Event Wiring and Presentation
 
-Use a scan coordinator to update range state on:
+Status: implemented for highlighting.
+
+Use `FragmentTracker` to update range state on:
 
 - active editor change;
 - visible range change;
@@ -368,6 +401,8 @@ Use a presenter to listen to range store changes and forward the latest range sn
 
 ### 6. Commands
 
+Status: partially implemented.
+
 Implement command behavior:
 
 - `json-fragments.toggleHighlightForFile`;
@@ -376,7 +411,15 @@ Implement command behavior:
 
 The scan command should be useful for debugging and for users who do not want automatic highlighting.
 
+Current behavior:
+
+- `toggleHighlightForFile` toggles tracking for the active editor document.
+- `toggleTemporaryHighlightForFocusedFiles` toggles tracking that follows focused editors.
+- `scanVisibleJsonFragments` scans the active editor once without adding it to tracked documents.
+
 ### 7. Verification
+
+Status: scanner tests exist. Dedicated tracker/highlight tests are still missing.
 
 Add tests for scanner and range calculation.
 

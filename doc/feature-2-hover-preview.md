@@ -1,5 +1,16 @@
 # Feature 2: Hover Preview
 
+## Current Status
+
+Planned. No hover provider is implemented yet.
+
+Relevant existing pieces:
+
+- `Store.findFragmentAt(uri, position)` can find cached fragments for highlighted documents.
+- `Scanner.format(value)` can produce formatted JSON.
+- `Scanner.scanLine(line)` can support fallback line scanning.
+- `FragmentTracker` keeps store snapshots current for tracked or auto-highlighted visible ranges.
+
 ## Purpose
 
 Show the JSON fragment under the cursor in a VS Code hover so the user can inspect the fragment without copying it into a separate formatter.
@@ -92,7 +103,7 @@ If a limit is hit, the hover provider should return no hover instead of showing 
 
 ## Proposed Modules
 
-- `src/editor`: hover provider and VS Code `MarkdownString` integration.
+- `src/hover`: hover provider and VS Code `MarkdownString` integration.
 - `src/store`: fragment cache lookup by document URI, version, and position.
 - `src/scanner`: fallback line scanning and formatting.
 - `src/domain`: shared fragment type and range helpers if needed.
