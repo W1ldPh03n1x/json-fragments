@@ -1,4 +1,11 @@
 export {
+  DynamicPreviewContentProvider,
+  createDynamicPreviewContent,
+} from "./DynamicPreviewContentProvider";
+export {
+  DynamicPreviewController,
+} from "./DynamicPreviewController";
+export {
   StaticPreviewContentProvider,
 } from "./StaticPreviewContentProvider";
 export {
@@ -12,6 +19,9 @@ export {
   StaticPreviewRegistry,
 } from "./StaticPreviewRegistry";
 export {
+  dynamicPreviewScheme,
+  dynamicPreviewUri,
+  openDynamicPreviewCommand,
   openStaticPreviewCommand,
   staticPreviewScheme,
   type OpenStaticPreviewArgs,

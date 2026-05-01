@@ -46,6 +46,21 @@ export class FragmentHoverProvider implements vscode.HoverProvider {
     position: vscode.Position,
     scanner: ScannerApi,
   ): Fragment | undefined {
+    const currentLineSnapshot = this.store.getCurrentLineSnapshot();
+
+    if (
+      currentLineSnapshot?.version === document.version &&
+      currentLineSnapshot.uri.toString() === document.uri.toString() &&
+      currentLineSnapshot.line === position.line
+    ) {
+      const currentLineFragment = currentLineSnapshot.fragments
+        .find((fragment) => containsPosition(fragment.range, position));
+
+      if (currentLineFragment !== undefined) {
+        return currentLineFragment;
+      }
+    }
+
     const snapshot = this.store.getSnapshot(document.uri);
 
     if (snapshot?.version === document.version) {

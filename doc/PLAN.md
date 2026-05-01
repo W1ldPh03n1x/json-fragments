@@ -58,6 +58,8 @@ Detailed notes: `doc/fragment-tracker.md`.
 
 `Store` keeps the latest fragment snapshot per document URI and emits `onDidChangeFragments` whenever a snapshot changes or is cleared.
 
+`Store` also keeps the current-line fragment snapshot for the active source editor. This state is updated by `FragmentTracker` and reused by dynamic preview and fast active-line lookups.
+
 `HighlightPresenter` listens to store changes and forwards ranges to `TextDecorator`.
 
 `TextDecorator` is the only current module that calls VS Code decoration APIs.
@@ -161,16 +163,25 @@ Current approach:
 
 ### 5. Dynamic Preview Command
 
-Status: planned.
+Status: first working implementation exists.
 
 Implement a command that opens a dedicated preview tab for the active editor context.
 
-Expected result:
+Detailed feature plan: `doc/feature-3-dynamic-preview.md`.
+
+Current result:
 
 - by default, the preview shows fragments from the current line;
-- when text is selected and the selection feature flag is enabled, the preview can show all fragments from the selection;
-- preview updates when the cursor, selection, or source document changes;
-- multiple fragments are presented clearly in one view.
+- preview updates when the cursor, active source editor, or source document changes;
+- one fragment is presented as the formatted JSON value;
+- multiple fragments are presented as a JSON array of values;
+- dynamic preview listens to the store current-line snapshot and does not maintain its own tracker, context, registry, or scanner state.
+
+Known limitations:
+
+- selection scanning is not implemented yet;
+- multiline fragments are not shown yet;
+- dynamic preview is a virtual JSON document, not an interactive webview.
 
 ### 6. Inline Fragment Syntax Highlighting
 

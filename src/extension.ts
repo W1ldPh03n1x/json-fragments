@@ -3,6 +3,10 @@ import { Config } from "./config";
 import { HighlightPresenter, TextDecorator } from "./highlight";
 import { FragmentHoverProvider, fragmentHoverDocumentSelector } from "./hover";
 import {
+    DynamicPreviewContentProvider,
+    DynamicPreviewController,
+    dynamicPreviewScheme,
+    openDynamicPreviewCommand,
     openStaticPreviewCommand,
     StaticPreviewContentProvider,
     StaticPreviewController,
@@ -20,6 +24,7 @@ const commandRegistry = {
     toggleHighlightForFile: "json-fragments.toggleHighlightForFile",
     toggleTemporaryHighlightForFocusedFiles: "json-fragments.toggleTemporaryHighlightForFocusedFiles",
     openStaticPreview: openStaticPreviewCommand,
+    openDynamicPreview: openDynamicPreviewCommand,
 } as const;
 
 export function activate(context: vscode.ExtensionContext) {
@@ -36,10 +41,11 @@ export function activate(context: vscode.ExtensionContext) {
     const previewRegistry = new StaticPreviewRegistry();
     const previewContentProvider = new StaticPreviewContentProvider(config, previewRegistry);
     const previewController = new StaticPreviewController(config, store, previewRegistry);
-    const previewDefinitionProvider = new StaticPreviewDefinitionProvider(
-        config,
-        store,
-    );
+
+    const dynamicPreviewContentProvider = new DynamicPreviewContentProvider(store);
+    const dynamicPreviewController = new DynamicPreviewController(tracker);
+
+    const previewDefinitionProvider = new StaticPreviewDefinitionProvider(config, store);
 
     context.subscriptions.push(
         config,
@@ -49,15 +55,11 @@ export function activate(context: vscode.ExtensionContext) {
         tracker,
         previewRegistry,
         previewController,
+        dynamicPreviewContentProvider,
         vscode.languages.registerHoverProvider(fragmentHoverDocumentSelector, hoverProvider),
-        vscode.workspace.registerTextDocumentContentProvider(
-            staticPreviewScheme,
-            previewContentProvider,
-        ),
-        vscode.languages.registerDefinitionProvider(
-            staticPreviewDocumentSelector,
-            previewDefinitionProvider,
-        ),
+        vscode.workspace.registerTextDocumentContentProvider(staticPreviewScheme, previewContentProvider),
+        vscode.workspace.registerTextDocumentContentProvider(dynamicPreviewScheme, dynamicPreviewContentProvider),
+        vscode.languages.registerDefinitionProvider(staticPreviewDocumentSelector, previewDefinitionProvider),
         vscode.commands.registerCommand(commandRegistry.scanVisibleFragments, () => {
             tracker.scanActiveEditor();
         }),
@@ -69,6 +71,9 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand(commandRegistry.openStaticPreview, (args?: unknown) => {
             return previewController.openStaticPreview(args);
+        }),
+        vscode.commands.registerCommand(commandRegistry.openDynamicPreview, () => {
+            return dynamicPreviewController.openDynamicPreview();
         }),
     );
 }

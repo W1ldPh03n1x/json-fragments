@@ -81,6 +81,17 @@ function findCurrentCachedFragment(
   document: vscode.TextDocument,
   position: vscode.Position,
 ): Fragment | undefined {
+  const currentLineSnapshot = store.getCurrentLineSnapshot();
+
+  if (
+    currentLineSnapshot?.version === document.version &&
+    sameUri(currentLineSnapshot.uri, document.uri) &&
+    currentLineSnapshot.line === position.line
+  ) {
+    return currentLineSnapshot.fragments
+      .find((fragment) => containsPosition(fragment.range, position));
+  }
+
   const snapshot = store.getSnapshot(document.uri);
 
   if (snapshot?.version !== document.version) {
@@ -122,4 +133,8 @@ function isSingleLineRange(range: vscode.Range): boolean {
 
 function rangesEqual(left: vscode.Range, right: vscode.Range): boolean {
   return left.start.isEqual(right.start) && left.end.isEqual(right.end);
+}
+
+function sameUri(left: vscode.Uri, right: vscode.Uri): boolean {
+  return left.toString() === right.toString();
 }

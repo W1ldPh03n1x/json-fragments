@@ -39,6 +39,10 @@
       {
         "command": "json-fragments.openStaticPreview",
         "title": "JSON Fragments: Open Static Preview"
+      },
+      {
+        "command": "json-fragments.openDynamicPreview",
+        "title": "JSON Fragments: Open Dynamic Preview"
       }
     ],
     "configuration": {

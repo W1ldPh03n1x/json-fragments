@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import { Config, isFileAllowed, readRuntimeSettings } from "../config";
 import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
 import {
+  createDynamicPreviewContent,
   StaticPreviewContentProvider,
   StaticPreviewDefinitionProvider,
   StaticPreviewRegistry,
@@ -354,6 +355,98 @@ suite("Config", () => {
   });
 });
 
+suite("Store current line", () => {
+  test("stores and emits current line fragments independently from document snapshots", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///current-line.log", 4, 'INFO {"ok":true}');
+    const fragment = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments[0];
+    const changes: string[] = [];
+
+    store.onDidChangeCurrentLineFragments((event) => {
+      changes.push(event.reason);
+    });
+    store.setCurrentLineSnapshot({
+      uri: document.uri,
+      version: document.version,
+      line: 0,
+      range: document.lineAt(0).range,
+      fragments: [fragment],
+    }, "cursor");
+
+    assert.strictEqual(store.getCurrentLineSnapshot()?.fragments.length, 1);
+    assert.deepStrictEqual(changes, ["cursor"]);
+
+    store.setSnapshot({
+      uri: document.uri,
+      version: document.version,
+      scannedRanges: [document.lineAt(0).range],
+      fragments: [],
+    });
+
+    assert.strictEqual(store.getCurrentLineSnapshot()?.fragments.length, 1);
+    store.dispose();
+  });
+
+  test("clears current line when its document is cleared", () => {
+    const store = new Store<Fragment>();
+    const document = createTextDocument("file:///closed.log", 1, 'INFO {"ok":true}');
+    const fragment = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments[0];
+    const changes: string[] = [];
+
+    store.onDidChangeCurrentLineFragments((event) => {
+      changes.push(event.reason);
+    });
+    store.setCurrentLineSnapshot({
+      uri: document.uri,
+      version: document.version,
+      line: 0,
+      range: document.lineAt(0).range,
+      fragments: [fragment],
+    }, "cursor");
+    store.clearDocument(document.uri, "document-closed");
+
+    assert.strictEqual(store.getCurrentLineSnapshot(), undefined);
+    assert.deepStrictEqual(changes, ["cursor", "document-closed"]);
+    store.dispose();
+  });
+});
+
+suite("DynamicPreviewContentProvider", () => {
+  test("builds empty dynamic preview content without current source", () => {
+    assert.strictEqual(createDynamicPreviewContent(undefined), "null");
+  });
+
+  test("builds the formatted JSON value for a single current line fragment", () => {
+    const document = createTextDocument("file:///dynamic.log", 8, 'INFO {"ok":true}');
+    const fragment = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments[0];
+
+    assert.deepStrictEqual(JSON.parse(createDynamicPreviewContent({
+      uri: document.uri,
+      version: document.version,
+      line: 0,
+      range: document.lineAt(0).range,
+      fragments: [fragment],
+    })), { ok: true });
+  });
+
+  test("builds an array of JSON values for multiple current line fragments", () => {
+    const document = createTextDocument(
+      "file:///dynamic-many.log",
+      8,
+      'INFO {"ok":true} WARN {"id":1}',
+    );
+    const fragments = createScanner(defaultOptions).scanLine(document.lineAt(0)).fragments;
+
+    assert.deepStrictEqual(JSON.parse(createDynamicPreviewContent({
+      uri: document.uri,
+      version: document.version,
+      line: 0,
+      range: document.lineAt(0).range,
+      fragments,
+    })), [{ ok: true }, { id: 1 }]);
+  });
+});
+
 suite("StaticPreviewRegistry", () => {
   test("reuses a preview for the same source identity", () => {
     const registry = new StaticPreviewRegistry();
@@ -654,6 +747,7 @@ function createTextDocument(
   return {
     uri: vscode.Uri.parse(uri),
     version,
+    lineCount: lines.length,
     lineAt: (line: number) => createTextLine(line, lines[line] ?? ""),
   } as vscode.TextDocument;
 }

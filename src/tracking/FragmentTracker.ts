@@ -1,12 +1,13 @@
 import * as vscode from "vscode";
 import { scannerLimits, type Config } from "../config";
 import { createScanner, type Fragment } from "../scanner";
-import type { Store } from "../store";
+import type { CurrentLineChangeReason, Store } from "../store";
 
 export class FragmentTracker implements vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
     private readonly trackedDocuments = new Set<string>();
     private readonly pendingScans = new Map<string, ReturnType<typeof setTimeout>>();
+    private currentSourceEditor: vscode.TextEditor | undefined;
     private temporaryFocusedTrackingEnabled = false;
 
     public constructor(
@@ -23,17 +24,29 @@ export class FragmentTracker implements vscode.Disposable {
                 this.scheduleScanEditorIfTracked(event.textEditor);
             }),
             vscode.window.onDidChangeActiveTextEditor((editor) => {
+                this.handleActiveEditorChange(editor);
+
                 if (editor === undefined || !this.temporaryFocusedTrackingEnabled) {
                     return;
                 }
 
                 this.enableEditor(editor);
             }),
+            vscode.window.onDidChangeTextEditorSelection((event) => {
+                this.handleSelectionChange(event.textEditor);
+            }),
             vscode.workspace.onDidChangeTextDocument((event) => {
                 for (const editor of vscode.window.visibleTextEditors) {
                     if (sameUri(editor.document.uri, event.document.uri)) {
                         this.scheduleScanEditorIfTracked(editor);
                     }
+                }
+
+                if (
+                    this.currentSourceEditor !== undefined &&
+                    sameUri(this.currentSourceEditor.document.uri, event.document.uri)
+                ) {
+                    this.updateCurrentLineSnapshot("document-change");
                 }
             }),
             vscode.workspace.onDidCloseTextDocument((document) => {
@@ -42,6 +55,13 @@ export class FragmentTracker implements vscode.Disposable {
                 this.trackedDocuments.delete(key);
                 this.cancelPendingScan(key);
                 this.store.clearDocument(document.uri, "document-closed");
+
+                if (
+                    this.currentSourceEditor !== undefined &&
+                    sameUri(this.currentSourceEditor.document.uri, document.uri)
+                ) {
+                    this.currentSourceEditor = undefined;
+                }
             }),
             this.config.onDidChange(() => {
                 for (const editor of vscode.window.visibleTextEditors) {
@@ -52,14 +72,27 @@ export class FragmentTracker implements vscode.Disposable {
 
                     this.scheduleScanEditorIfTracked(editor);
                 }
+
+                if (
+                    this.currentSourceEditor === undefined ||
+                    !this.config.isDocumentAllowed(this.currentSourceEditor.document)
+                ) {
+                    this.currentSourceEditor = undefined;
+                    this.store.clearCurrentLine("disabled");
+                    return;
+                }
+
+                this.updateCurrentLineSnapshot("active-editor");
             }),
         );
+
+        this.handleActiveEditorChange(vscode.window.activeTextEditor);
     }
 
     public toggleActiveEditor(): void {
         const editor = vscode.window.activeTextEditor;
 
-        if (editor === undefined) {
+        if (editor === undefined || isPreviewDocument(editor.document)) {
             return;
         }
 
@@ -82,6 +115,10 @@ export class FragmentTracker implements vscode.Disposable {
         const editor = vscode.window.activeTextEditor;
 
         if (editor !== undefined) {
+            if (isPreviewDocument(editor.document)) {
+                return;
+            }
+
             if (!this.config.isDocumentAllowed(editor.document)) {
                 this.disableDocument(editor.document.uri);
                 return;
@@ -89,6 +126,10 @@ export class FragmentTracker implements vscode.Disposable {
 
             this.scanEditor(editor);
         }
+    }
+
+    public refreshCurrentLine(): void {
+        this.handleActiveEditorChange(vscode.window.activeTextEditor);
     }
 
     public toggleTemporaryFocusedTracking(): void {
@@ -122,6 +163,10 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private enableEditor(editor: vscode.TextEditor): void {
+        if (isPreviewDocument(editor.document)) {
+            return;
+        }
+
         if (!this.config.isDocumentAllowed(editor.document)) {
             this.disableDocument(editor.document.uri);
             return;
@@ -148,6 +193,10 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private shouldTrackEditor(editor: vscode.TextEditor): boolean {
+        if (isPreviewDocument(editor.document)) {
+            return false;
+        }
+
         if (!this.config.isDocumentAllowed(editor.document)) {
             this.disableDocument(editor.document.uri);
             return false;
@@ -157,7 +206,83 @@ export class FragmentTracker implements vscode.Disposable {
             this.trackedDocuments.has(createUriKey(editor.document.uri));
     }
 
+    private handleActiveEditorChange(editor: vscode.TextEditor | undefined): void {
+        if (editor === undefined) {
+            this.currentSourceEditor = undefined;
+            this.store.clearCurrentLine("clear");
+            return;
+        }
+
+        if (isPreviewDocument(editor.document)) {
+            return;
+        }
+
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.currentSourceEditor = undefined;
+            this.store.clearCurrentLine("disabled");
+            return;
+        }
+
+        this.currentSourceEditor = editor;
+        this.updateCurrentLineSnapshot("active-editor");
+    }
+
+    private handleSelectionChange(editor: vscode.TextEditor): void {
+        if (isPreviewDocument(editor.document)) {
+            return;
+        }
+
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            if (
+                this.currentSourceEditor !== undefined &&
+                sameUri(this.currentSourceEditor.document.uri, editor.document.uri)
+            ) {
+                this.currentSourceEditor = undefined;
+                this.store.clearCurrentLine("disabled");
+            }
+
+            return;
+        }
+
+        this.currentSourceEditor = editor;
+        this.updateCurrentLineSnapshot("cursor");
+    }
+
+    private updateCurrentLineSnapshot(reason: CurrentLineChangeReason): void {
+        const editor = this.currentSourceEditor;
+
+        if (editor === undefined || !this.config.isDocumentAllowed(editor.document)) {
+            this.store.clearCurrentLine("disabled");
+            return;
+        }
+
+        const lineNumber = editor.selection.active.line;
+
+        if (lineNumber < 0 || lineNumber >= editor.document.lineCount) {
+            this.store.clearCurrentLine("clear");
+            return;
+        }
+
+        const scanner = createScanner({
+            ...this.config.scannerOptions,
+            ...scannerLimits,
+        });
+        const line = editor.document.lineAt(lineNumber);
+
+        this.store.setCurrentLineSnapshot({
+            uri: editor.document.uri,
+            version: editor.document.version,
+            line: lineNumber,
+            range: line.range,
+            fragments: scanner.scanLine(line).fragments,
+        }, reason);
+    }
+
     private scheduleScanEditor(editor: vscode.TextEditor): void {
+        if (isPreviewDocument(editor.document)) {
+            return;
+        }
+
         if (!this.config.isDocumentAllowed(editor.document)) {
             this.disableDocument(editor.document.uri);
             return;
@@ -271,4 +396,9 @@ function sameUri(left: vscode.Uri, right: vscode.Uri): boolean {
 
 function createUriKey(uri: vscode.Uri): string {
     return uri.toString();
+}
+
+function isPreviewDocument(document: vscode.TextDocument): boolean {
+    return document.uri.scheme === "json-fragments-preview" ||
+        document.uri.scheme === "json-fragments-dynamic-preview";
 }

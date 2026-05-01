@@ -1,7 +1,9 @@
 import * as vscode from "vscode";
 
 export const staticPreviewScheme = "json-fragments-preview";
+export const dynamicPreviewScheme = "json-fragments-dynamic-preview";
 export const openStaticPreviewCommand = "json-fragments.openStaticPreview";
+export const openDynamicPreviewCommand = "json-fragments.openDynamicPreview";
 
 export type SerializablePosition = {
   line: number;
@@ -27,6 +29,11 @@ export type StaticPreview = {
   content: string;
   openedAt: number;
 };
+
+export const dynamicPreviewUri = vscode.Uri.from({
+  scheme: dynamicPreviewScheme,
+  path: "/current-line.json",
+});
 
 export function serializeRange(range: vscode.Range): SerializableRange {
   return {
