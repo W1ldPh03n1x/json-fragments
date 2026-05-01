@@ -1,0 +1,5 @@
+Project naming rule:
+- Do not prefix every file, class, type, function, or local entity with the extension name (`JsonFragments`, `jsonFragments`, etc.) by default. This repository is already scoped to the JSON Fragments extension, so names should be concise and domain-focused unless a prefix is needed to avoid a real ambiguity with VS Code APIs, external libraries, or another local concept.
+
+Project module rule:
+- Domain folders should preferably expose an `index.ts` barrel as their public entrypoint. Keep index files small and intentional: re-export the folder's public API, but do not put implementation logic in them.
