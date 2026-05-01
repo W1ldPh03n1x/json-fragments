@@ -13,6 +13,7 @@
 ## Documentation
 
 - High-level implementation plan: `doc/PLAN.md`.
+- First user-facing feature plan: `doc/feature-1-inline-highlighting.md`.
 - First implementation step details: `doc/step-1-fragment-detection.md`.
 - Existing local Codex notes: `.codex`.
 

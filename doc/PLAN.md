@@ -62,6 +62,8 @@ Expected result:
 
 Add editor decorations for detected fragments.
 
+Detailed feature plan: `doc/feature-1-inline-highlighting.md`.
+
 Expected result:
 
 - user can enable highlighting for the current file;
