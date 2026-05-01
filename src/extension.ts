@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import { Config } from "./config";
+import { HighlightPresenter, TextDecorator } from "./highlight";
+import type { Fragment } from "./scanner";
 import { Store } from "./store";
+import { FragmentTracker } from "./tracking";
 
 const commandRegistry = {
     scanVisibleFragments: "json-fragments.scanVisibleJsonFragments",
@@ -11,9 +14,27 @@ const commandRegistry = {
 
 export function activate(context: vscode.ExtensionContext) {
     const config = new Config();
-    const store = new Store();
+    const store = new Store<Fragment>();
+    const decorator = new TextDecorator();
+    const presenter = new HighlightPresenter(store, decorator);
+    const tracker = new FragmentTracker(config, store);
 
-    context.subscriptions.push(config);
+    context.subscriptions.push(
+        config,
+        store,
+        decorator,
+        presenter,
+        tracker,
+        vscode.commands.registerCommand(commandRegistry.scanVisibleFragments, () => {
+            tracker.scanActiveEditor();
+        }),
+        vscode.commands.registerCommand(commandRegistry.toggleHighlightForFile, () => {
+            tracker.toggleActiveEditor();
+        }),
+        vscode.commands.registerCommand(commandRegistry.toggleTemporaryHighlightForFocusedFiles, () => {
+            tracker.toggleTemporaryFocusedTracking();
+        }),
+    );
 }
 
 export function deactivate() {}
