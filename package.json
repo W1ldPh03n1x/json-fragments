@@ -2,7 +2,7 @@
   "name": "json-fragments",
   "displayName": "JSON Fragments",
   "description": "Find, highlight, and preview JSON fragments embedded in any text file.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "assets/icon.png",
   "repository": {
     "type": "git",
