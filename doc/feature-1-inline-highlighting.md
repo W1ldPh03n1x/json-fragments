@@ -18,7 +18,7 @@ Current limitations:
 - multiline fragments are not highlighted yet;
 - range hysteresis is not implemented;
 - scan limits are constants, not user settings;
-- `openLineJsonFragmentsPreview` is contributed but not implemented.
+- line preview is not included in the first release.
 
 ## Purpose
 
@@ -42,7 +42,7 @@ Highlighting should be subtle by default. It should make valid fragments discove
 
 By default, automatic scanning scans exactly the visible editor ranges.
 
-The `json-fragments.viewportLookaheadRatio` setting adds viewport scan padding. When it is greater than `0`, the extension scans additional lines above and below the visible viewport.
+The `json-fragments.tracker.viewportLookaheadRatio` setting adds viewport scan padding. When it is greater than `0`, the extension scans additional lines above and below the visible viewport.
 
 Current behavior:
 
@@ -77,7 +77,7 @@ This can reduce work and further reduce flicker.
 
 Debounce scanning after scroll, text change, and active editor changes.
 
-Use the existing `autoHighlightDebounceMs` setting as the main control. Default `100ms` is reasonable for the first version.
+Use the existing `json-fragments.tracker.autoHighlightDebounceMs` setting as the main control. Default `100ms` is reasonable for the first version.
 
 ### Versioned Results
 
@@ -149,10 +149,10 @@ Optional later settings:
 
 Existing settings:
 
-- `json-fragments.autoHighlightVisibleRanges`;
-- `json-fragments.includePrimitiveArrays`;
-- `json-fragments.autoHighlightDebounceMs`.
-- `json-fragments.viewportLookaheadRatio`.
+- `json-fragments.tracker.autoHighlightVisibleRanges`;
+- `json-fragments.scanner.includePrimitiveArrays`;
+- `json-fragments.tracker.autoHighlightDebounceMs`.
+- `json-fragments.tracker.viewportLookaheadRatio`.
 
 New settings to consider:
 
@@ -367,7 +367,7 @@ It should not scan, parse, subscribe to scanner events, or contain hover behavio
 
 Status: partially implemented.
 
-Current behavior expands `editor.visibleRanges` with `viewportLookaheadRatio`, clamps them to document boundaries, converts the expanded ranges into unique line numbers, and scans those lines. It does not merge overlapping padded ranges or use hysteresis yet.
+Current behavior expands `editor.visibleRanges` with `tracker.viewportLookaheadRatio`, clamps them to document boundaries, converts the expanded ranges into unique line numbers, and scans those lines. It does not merge overlapping padded ranges or use hysteresis yet.
 
 Create logic that converts `editor.visibleRanges` into scan ranges.
 

@@ -1,8 +1,17 @@
 {
   "name": "json-fragments",
-  "displayName": "Json Fragments",
-  "description": "Simple extention for fast preview json structures in any type file",
+  "displayName": "JSON Fragments",
+  "description": "Find, highlight, and preview JSON fragments embedded in any text file.",
   "version": "0.0.1",
+  "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/W1ldPh03n1x/json-fragments.git"
+  },
+  "bugs": {
+    "url": "https://github.com/W1ldPh03n1x/json-fragments/issues"
+  },
+  "homepage": "https://github.com/W1ldPh03n1x/json-fragments#readme",
   "engines": {
     "vscode": "^1.116.0"
   },
@@ -20,10 +29,6 @@
         "title": "JSON Fragments: Scan Visible JSON Fragments"
       },
       {
-        "command": "json-fragments.openLineJsonFragmentsPreview",
-        "title": "JSON Fragments: Open Line JSON Fragments Preview"
-      },
-      {
         "command": "json-fragments.toggleHighlightForFile",
         "title": "JSON Fragments: Toggle Highlight for File"
       },
@@ -35,23 +40,23 @@
     "configuration": {
       "title": "JSON Fragments",
       "properties": {
-        "json-fragments.autoHighlightVisibleRanges": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically highlight JSON fragments in the visible ranges of the active editor."
-        },
-        "json-fragments.includePrimitiveArrays": {
+        "json-fragments.scanner.includePrimitiveArrays": {
           "type": "boolean",
           "default": false,
           "description": "Treat empty arrays and arrays containing only primitive values as JSON fragments."
         },
-        "json-fragments.autoHighlightDebounceMs": {
+        "json-fragments.tracker.autoHighlightVisibleRanges": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically highlight JSON fragments in the visible ranges of the active editor."
+        },
+        "json-fragments.tracker.autoHighlightDebounceMs": {
           "type": "number",
           "default": 100,
           "minimum": 0,
           "description": "Delay in milliseconds before rescanning visible ranges after editor and document events."
         },
-        "json-fragments.viewportLookaheadRatio": {
+        "json-fragments.tracker.viewportLookaheadRatio": {
           "type": "number",
           "default": 0,
           "minimum": 0,

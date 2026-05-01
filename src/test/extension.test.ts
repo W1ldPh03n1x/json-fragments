@@ -1,7 +1,7 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
 
-import { Config } from "../config";
+import { Config, readRuntimeSettings } from "../config";
 import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
 import { createScanner, type Fragment, type ScannerOptions } from "../scanner";
 import { Store } from "../store";
@@ -248,6 +248,36 @@ suite("FragmentHoverProvider", () => {
 
     assertHoverContains(hover, "\"fresh\": true");
     store.dispose();
+  });
+});
+
+suite("Config", () => {
+  test("reads domain-scoped settings and builds scanner options", () => {
+    const values = new Map<string, unknown>([
+      ["scanner.includePrimitiveArrays", true],
+      ["tracker.autoHighlightVisibleRanges", true],
+      ["tracker.autoHighlightDebounceMs", 250],
+      ["tracker.viewportLookaheadRatio", 0.5],
+    ]);
+
+    function get<T>(section: string): T | undefined;
+    function get<T>(section: string, defaultValue: T): T;
+    function get<T>(section: string, defaultValue?: T): T | undefined {
+      return (values.get(section) ?? defaultValue) as T | undefined;
+    }
+
+    const settings = readRuntimeSettings({ get });
+
+    assert.deepStrictEqual(settings, {
+      scanner: {
+        includePrimitiveArrays: true,
+      },
+      tracker: {
+        autoHighlightVisibleRanges: true,
+        autoHighlightDebounceMs: 250,
+        viewportLookaheadRatio: 0.5,
+      },
+    });
   });
 });
 

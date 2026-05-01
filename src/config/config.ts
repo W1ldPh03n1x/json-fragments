@@ -4,7 +4,10 @@ import {
   settingsDefaults,
   type RuntimeSettings,
   type SettingsKey,
+  type SettingsValue,
 } from "./settings";
+
+type ConfigurationReader = Pick<vscode.WorkspaceConfiguration, "get">;
 
 export class Config implements vscode.Disposable {
   private readonly disposables: vscode.Disposable[] = [];
@@ -30,13 +33,13 @@ export class Config implements vscode.Disposable {
     return this.currentSettings;
   }
 
-  public get<Key extends SettingsKey>(key: Key): RuntimeSettings[Key] {
-    return this.currentSettings[key];
+  public get<Key extends SettingsKey>(key: Key): SettingsValue<Key> {
+    return getRuntimeSetting(this.currentSettings, key);
   }
 
-  public get scannerOptions(): Pick<RuntimeSettings, "includePrimitiveArrays"> {
+  public get scannerOptions(): RuntimeSettings["scanner"] {
     return {
-      includePrimitiveArrays: this.settings.includePrimitiveArrays,
+      includePrimitiveArrays: this.settings.scanner.includePrimitiveArrays,
     };
   }
 
@@ -52,13 +55,45 @@ export class Config implements vscode.Disposable {
   }
 
   private readSettings(): RuntimeSettings {
-    const configuration = vscode.workspace.getConfiguration(section);
+    return readRuntimeSettings(vscode.workspace.getConfiguration(section));
+  }
+}
 
-    return Object.fromEntries(
-      Object.entries(settingsDefaults).map(([key, defaultValue]) => [
-        key,
-        configuration.get(key, defaultValue),
-      ]),
-    ) as RuntimeSettings;
+export function readRuntimeSettings(configuration: ConfigurationReader): RuntimeSettings {
+  return {
+    scanner: {
+      includePrimitiveArrays: readSetting(configuration, "scanner.includePrimitiveArrays"),
+    },
+    tracker: {
+      autoHighlightVisibleRanges: readSetting(
+        configuration,
+        "tracker.autoHighlightVisibleRanges",
+      ),
+      autoHighlightDebounceMs: readSetting(configuration, "tracker.autoHighlightDebounceMs"),
+      viewportLookaheadRatio: readSetting(configuration, "tracker.viewportLookaheadRatio"),
+    },
+  };
+}
+
+function readSetting<Key extends SettingsKey>(
+  configuration: ConfigurationReader,
+  key: Key,
+): SettingsValue<Key> {
+  return configuration.get(key, settingsDefaults[key]);
+}
+
+function getRuntimeSetting<Key extends SettingsKey>(
+  settings: RuntimeSettings,
+  key: Key,
+): SettingsValue<Key> {
+  switch (key) {
+    case "scanner.includePrimitiveArrays":
+      return settings.scanner.includePrimitiveArrays as SettingsValue<Key>;
+    case "tracker.autoHighlightVisibleRanges":
+      return settings.tracker.autoHighlightVisibleRanges as SettingsValue<Key>;
+    case "tracker.autoHighlightDebounceMs":
+      return settings.tracker.autoHighlightDebounceMs as SettingsValue<Key>;
+    case "tracker.viewportLookaheadRatio":
+      return settings.tracker.viewportLookaheadRatio as SettingsValue<Key>;
   }
 }

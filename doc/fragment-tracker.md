@@ -59,7 +59,7 @@ The canonical fragment list remains in `Store`.
 
 For inline highlighting, the current implementation scans expanded visible ranges.
 
-`json-fragments.viewportLookaheadRatio` controls how many extra lines are scanned above and below each visible range. The tracker clamps expanded ranges to document boundaries, expands them to line numbers, and scans each line independently with `scanner.scanLine(...)`.
+`json-fragments.tracker.viewportLookaheadRatio` controls how many extra lines are scanned above and below each visible range. The tracker clamps expanded ranges to document boundaries, expands them to line numbers, and scans each line independently with `scanner.scanLine(...)`.
 
 Current limitation:
 
@@ -200,13 +200,12 @@ Hover provider code should live outside `src/tracking`, for example in `src/hove
 - `json-fragments.toggleHighlightForFile`: toggle tracking for the active editor document.
 - `json-fragments.toggleTemporaryHighlightForFocusedFiles`: toggle tracking that follows the focused editor.
 
-`json-fragments.openLineJsonFragmentsPreview` is registered in `package.json` but is not wired yet.
-
 ## Current Settings
 
-- `json-fragments.autoHighlightVisibleRanges`: when enabled, visible editors are scanned without manual per-file tracking.
-- `json-fragments.includePrimitiveArrays`: passed to scanner options.
-- `json-fragments.autoHighlightDebounceMs`: controls delayed rescans after editor and document events.
+- `json-fragments.tracker.autoHighlightVisibleRanges`: when enabled, visible editors are scanned without manual per-file tracking.
+- `json-fragments.scanner.includePrimitiveArrays`: passed to scanner options.
+- `json-fragments.tracker.autoHighlightDebounceMs`: controls delayed rescans after editor and document events.
+- `json-fragments.tracker.viewportLookaheadRatio`: controls visible-range scan padding.
 
 ## Current Data Flow
 

@@ -128,14 +128,14 @@ export class FragmentTracker implements vscode.Disposable {
     }
 
     private shouldTrackEditor(editor: vscode.TextEditor): boolean {
-        return this.config.get("autoHighlightVisibleRanges") ||
+        return this.config.get("tracker.autoHighlightVisibleRanges") ||
             this.trackedDocuments.has(createUriKey(editor.document.uri));
     }
 
     private scheduleScanEditor(editor: vscode.TextEditor): void {
         const key = createUriKey(editor.document.uri);
         const version = editor.document.version;
-        const debounceMs = this.config.get("autoHighlightDebounceMs");
+        const debounceMs = this.config.get("tracker.autoHighlightDebounceMs");
 
         this.cancelPendingScan(key);
         this.pendingScans.set(key, setTimeout(() => {
@@ -157,7 +157,7 @@ export class FragmentTracker implements vscode.Disposable {
         const scannedRanges = createScanRanges(
             editor.visibleRanges,
             editor.document.lineCount,
-            this.config.get("viewportLookaheadRatio"),
+            this.config.get("tracker.viewportLookaheadRatio"),
         );
         const lines = getRangeLineNumbers(scannedRanges);
         const fragments: Fragment[] = [];

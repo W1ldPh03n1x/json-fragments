@@ -8,7 +8,6 @@ import { FragmentTracker } from "./tracking";
 
 const commandRegistry = {
     scanVisibleFragments: "json-fragments.scanVisibleJsonFragments",
-    openLinePreview: "json-fragments.openLineJsonFragmentsPreview",
     toggleHighlightForFile: "json-fragments.toggleHighlightForFile",
     toggleTemporaryHighlightForFocusedFiles: "json-fragments.toggleTemporaryHighlightForFocusedFiles",
 } as const;

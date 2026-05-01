@@ -2,24 +2,34 @@
 export const section = "json-fragments";
 
 export type SettingsSchema = {
-  autoHighlightVisibleRanges: boolean;
-  includePrimitiveArrays: boolean;
-  autoHighlightDebounceMs: number;
-  viewportLookaheadRatio: number;
+  "scanner.includePrimitiveArrays": boolean;
+  "tracker.autoHighlightVisibleRanges": boolean;
+  "tracker.autoHighlightDebounceMs": number;
+  "tracker.viewportLookaheadRatio": number;
 };
 
 export const settingsDefaults: SettingsSchema = {
-  autoHighlightVisibleRanges: false,
-  includePrimitiveArrays: false,
-  autoHighlightDebounceMs: 100,
-  viewportLookaheadRatio: 0,
+  "scanner.includePrimitiveArrays": false,
+  "tracker.autoHighlightVisibleRanges": false,
+  "tracker.autoHighlightDebounceMs": 100,
+  "tracker.viewportLookaheadRatio": 0,
 };
 
 export type SettingsKey = keyof SettingsSchema;
+export type SettingsValue<Key extends SettingsKey> = SettingsSchema[Key];
 
 export const settingKeys = createSettingKeys(section, settingsDefaults);
 
-export type RuntimeSettings = SettingsSchema;
+export type RuntimeSettings = {
+  scanner: {
+    includePrimitiveArrays: boolean;
+  };
+  tracker: {
+    autoHighlightVisibleRanges: boolean;
+    autoHighlightDebounceMs: number;
+    viewportLookaheadRatio: number;
+  };
+};
 
 function createSettingKeys<Schema extends Record<string, unknown>>(
   section: string,

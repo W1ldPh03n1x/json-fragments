@@ -1,5 +1,10 @@
 .vscode/**
 .vscode-test/**
+.codex
+AGENTS.md
+debug.log
+dev/**
+doc/**
 out/**
 node_modules/**
 src/**
