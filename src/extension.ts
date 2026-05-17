@@ -23,6 +23,9 @@ const commandRegistry = {
     scanVisibleFragments: "json-fragments.scanVisibleJsonFragments",
     toggleHighlightForFile: "json-fragments.toggleHighlightForFile",
     toggleTemporaryHighlightForFocusedFiles: "json-fragments.toggleTemporaryHighlightForFocusedFiles",
+    toggleInlineSyntaxHighlightForFile: "json-fragments.toggleInlineSyntaxHighlightForFile",
+    toggleTemporaryInlineSyntaxHighlightForFocusedFiles:
+        "json-fragments.toggleTemporaryInlineSyntaxHighlightForFocusedFiles",
     openStaticPreview: openStaticPreviewCommand,
     openDynamicPreview: openDynamicPreviewCommand,
 } as const;
@@ -31,10 +34,9 @@ export function activate(context: vscode.ExtensionContext) {
     const config = new Config();
     const store = new Store<Fragment>();
 
-    const decorator = new TextDecorator();
-    const presenter = new HighlightPresenter(store, decorator);
-
     const tracker = new FragmentTracker(config, store);
+    const decorator = new TextDecorator();
+    const presenter = new HighlightPresenter(store, decorator, tracker);
 
     const hoverProvider = new FragmentHoverProvider(config, store);
 
@@ -68,6 +70,12 @@ export function activate(context: vscode.ExtensionContext) {
         }),
         vscode.commands.registerCommand(commandRegistry.toggleTemporaryHighlightForFocusedFiles, () => {
             tracker.toggleTemporaryFocusedTracking();
+        }),
+        vscode.commands.registerCommand(commandRegistry.toggleInlineSyntaxHighlightForFile, () => {
+            tracker.toggleActiveEditorInlineSyntaxHighlight();
+        }),
+        vscode.commands.registerCommand(commandRegistry.toggleTemporaryInlineSyntaxHighlightForFocusedFiles, () => {
+            tracker.toggleTemporaryFocusedInlineSyntaxHighlight();
         }),
         vscode.commands.registerCommand(commandRegistry.openStaticPreview, (args?: unknown) => {
             return previewController.openStaticPreview(args);

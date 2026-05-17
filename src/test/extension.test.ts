@@ -2,6 +2,7 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 
 import { Config, isFileAllowed, readRuntimeSettings } from "../config";
+import { collectJsonTokenRanges, type JsonTokenKind, type JsonTokenRange } from "../highlight";
 import { createFragmentHoverMarkdown, FragmentHover, FragmentHoverProvider } from "../hover";
 import {
   createDynamicPreviewContent,
@@ -197,6 +198,52 @@ suite("Scanner.scanLine", () => {
   });
 });
 
+suite("Inline JSON token ranges", () => {
+  test("classifies keys separately from string values", () => {
+    const fragment = createScanner(defaultOptions).scanString('INFO {"ok":"yes"}').fragments[0];
+    const tokens = collectJsonTokenRanges([fragment]);
+
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "key"), ['"ok"']);
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "string"), ['"yes"']);
+  });
+
+  test("finds numbers, keywords, and punctuation", () => {
+    const fragment = createScanner({
+      ...defaultOptions,
+      includePrimitiveArrays: true,
+    }).scanString('INFO {"count":-1.5e+2,"items":[null,false,true]}').fragments[0];
+    const tokens = collectJsonTokenRanges([fragment]);
+
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "number"), ["-1.5e+2"]);
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "keyword"), ["null", "false", "true"]);
+    assert.ok(tokenTexts(fragment, tokens, "punctuation").includes("{"));
+    assert.ok(tokenTexts(fragment, tokens, "punctuation").includes("["));
+    assert.ok(tokenTexts(fragment, tokens, "punctuation").includes(":"));
+  });
+
+  test("handles escaped quotes inside strings", () => {
+    const fragment = createScanner(defaultOptions).scanString(
+      'INFO {"message":"say \\"hi\\"","next":true}',
+    ).fragments[0];
+    const tokens = collectJsonTokenRanges([fragment]);
+
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "key"), ['"message"', '"next"']);
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "string"), ['"say \\"hi\\""']);
+    assert.deepStrictEqual(tokenTexts(fragment, tokens, "keyword"), ["true"]);
+  });
+
+  test("returns absolute ranges for multiple fragments on one line", () => {
+    const fragments = createScanner(defaultOptions).scanString('A {"a":1} B {"b":2}').fragments;
+    const keys = collectJsonTokenRanges(fragments).filter((token) => token.kind === "key");
+
+    assert.strictEqual(keys.length, 2);
+    assert.strictEqual(keys[0].range.start.character, 3);
+    assert.strictEqual(keys[0].range.end.character, 6);
+    assert.strictEqual(keys[1].range.start.character, 13);
+    assert.strictEqual(keys[1].range.end.character, 16);
+  });
+});
+
 suite("FragmentHoverProvider", () => {
   test("builds Markdown JSON code block", () => {
     const markdown = createFragmentHoverMarkdown([
@@ -320,6 +367,7 @@ suite("Config", () => {
       ["tracker.autoHighlightVisibleRanges", true],
       ["tracker.autoHighlightDebounceMs", 250],
       ["tracker.viewportLookaheadRatio", 0.5],
+      ["inlineSyntaxHighlighting.autoHighlightVisibleRanges", true],
     ]);
 
     function get<T>(section: string): T | undefined;
@@ -350,6 +398,9 @@ suite("Config", () => {
         autoHighlightVisibleRanges: true,
         autoHighlightDebounceMs: 250,
         viewportLookaheadRatio: 0.5,
+      },
+      inlineSyntaxHighlighting: {
+        autoHighlightVisibleRanges: true,
       },
     });
   });
@@ -670,6 +721,21 @@ function assertRange(
   assert.strictEqual(fragment.range.start.character, startCharacter);
   assert.strictEqual(fragment.range.end.line, endLine);
   assert.strictEqual(fragment.range.end.character, endCharacter);
+}
+
+function tokenTexts(
+  fragment: Fragment,
+  tokens: readonly JsonTokenRange[],
+  kind: JsonTokenKind,
+): string[] {
+  return tokens
+    .filter((token) => token.kind === kind)
+    .map((token) => {
+      const start = token.range.start.character - fragment.range.start.character;
+      const end = token.range.end.character - fragment.range.start.character;
+
+      return fragment.raw.slice(start, end);
+    });
 }
 
 function createTextLine(lineNumber: number, text: string): vscode.TextLine {

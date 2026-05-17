@@ -94,6 +94,12 @@ export function readRuntimeSettings(configuration: ConfigurationReader): Runtime
       autoHighlightDebounceMs: readSetting(configuration, "tracker.autoHighlightDebounceMs"),
       viewportLookaheadRatio: readSetting(configuration, "tracker.viewportLookaheadRatio"),
     },
+    inlineSyntaxHighlighting: {
+      autoHighlightVisibleRanges: readSetting(
+        configuration,
+        "inlineSyntaxHighlighting.autoHighlightVisibleRanges",
+      ),
+    },
   };
 }
 
@@ -129,6 +135,8 @@ function getRuntimeSetting<Key extends SettingsKey>(
       return settings.tracker.autoHighlightDebounceMs as SettingsValue<Key>;
     case "tracker.viewportLookaheadRatio":
       return settings.tracker.viewportLookaheadRatio as SettingsValue<Key>;
+    case "inlineSyntaxHighlighting.autoHighlightVisibleRanges":
+      return settings.inlineSyntaxHighlighting.autoHighlightVisibleRanges as SettingsValue<Key>;
   }
 }
 

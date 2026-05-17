@@ -14,6 +14,7 @@ export type SettingsSchema = {
   "tracker.autoHighlightVisibleRanges": boolean;
   "tracker.autoHighlightDebounceMs": number;
   "tracker.viewportLookaheadRatio": number;
+  "inlineSyntaxHighlighting.autoHighlightVisibleRanges": boolean;
 };
 
 export const settingsDefaults: SettingsSchema = {
@@ -27,6 +28,7 @@ export const settingsDefaults: SettingsSchema = {
   "tracker.autoHighlightVisibleRanges": false,
   "tracker.autoHighlightDebounceMs": 100,
   "tracker.viewportLookaheadRatio": 0,
+  "inlineSyntaxHighlighting.autoHighlightVisibleRanges": false,
 };
 
 export type SettingsKey = keyof SettingsSchema;
@@ -54,6 +56,9 @@ export type RuntimeSettings = {
     autoHighlightVisibleRanges: boolean;
     autoHighlightDebounceMs: number;
     viewportLookaheadRatio: number;
+  };
+  inlineSyntaxHighlighting: {
+    autoHighlightVisibleRanges: boolean;
   };
 };
 

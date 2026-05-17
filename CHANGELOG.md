@@ -2,6 +2,13 @@
 
 All notable changes to the "json-fragments" extension will be documented in this file.
 
+## [0.0.3] - 2026-05-17
+
+- Added optional inline JSON syntax highlighting for detected fragments.
+- Added commands to toggle inline syntax highlighting for the active file and focused-file sessions.
+- Added `json-fragments.inlineSyntaxHighlighting.autoHighlightVisibleRanges`.
+- Documented current commands, settings, and preview behavior.
+
 ## [0.0.2] - 2026-05-01
 
 - Added static JSON fragment preview tabs with source navigation support.

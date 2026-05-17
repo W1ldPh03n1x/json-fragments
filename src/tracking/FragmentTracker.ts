@@ -5,10 +5,15 @@ import type { CurrentLineChangeReason, Store } from "../store";
 
 export class FragmentTracker implements vscode.Disposable {
     private readonly disposables: vscode.Disposable[] = [];
-    private readonly trackedDocuments = new Set<string>();
+    private readonly fragmentTrackedDocuments = new Set<string>();
+    private readonly syntaxTrackedDocuments = new Set<string>();
     private readonly pendingScans = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly highlightLayersChangedEmitter = new vscode.EventEmitter<vscode.Uri>();
     private currentSourceEditor: vscode.TextEditor | undefined;
     private temporaryFocusedTrackingEnabled = false;
+    private temporaryFocusedSyntaxTrackingEnabled = false;
+
+    public readonly onDidChangeHighlightLayers = this.highlightLayersChangedEmitter.event;
 
     public constructor(
         private readonly config: Config,
@@ -26,11 +31,17 @@ export class FragmentTracker implements vscode.Disposable {
             vscode.window.onDidChangeActiveTextEditor((editor) => {
                 this.handleActiveEditorChange(editor);
 
-                if (editor === undefined || !this.temporaryFocusedTrackingEnabled) {
+                if (editor === undefined) {
                     return;
                 }
 
-                this.enableEditor(editor);
+                if (this.temporaryFocusedTrackingEnabled) {
+                    this.enableFragmentHighlight(editor);
+                }
+
+                if (this.temporaryFocusedSyntaxTrackingEnabled) {
+                    this.enableInlineSyntaxHighlight(editor);
+                }
             }),
             vscode.window.onDidChangeTextEditorSelection((event) => {
                 this.handleSelectionChange(event.textEditor);
@@ -52,9 +63,11 @@ export class FragmentTracker implements vscode.Disposable {
             vscode.workspace.onDidCloseTextDocument((document) => {
                 const key = createUriKey(document.uri);
 
-                this.trackedDocuments.delete(key);
+                this.fragmentTrackedDocuments.delete(key);
+                this.syntaxTrackedDocuments.delete(key);
                 this.cancelPendingScan(key);
                 this.store.clearDocument(document.uri, "document-closed");
+                this.highlightLayersChangedEmitter.fire(document.uri);
 
                 if (
                     this.currentSourceEditor !== undefined &&
@@ -66,11 +79,17 @@ export class FragmentTracker implements vscode.Disposable {
             this.config.onDidChange(() => {
                 for (const editor of vscode.window.visibleTextEditors) {
                     if (!this.config.isDocumentAllowed(editor.document)) {
-                        this.disableDocument(editor.document.uri);
+                        this.disableAllDocumentLayers(editor.document.uri);
                         continue;
                     }
 
-                    this.scheduleScanEditorIfTracked(editor);
+                    this.highlightLayersChangedEmitter.fire(editor.document.uri);
+
+                    if (this.shouldTrackEditor(editor)) {
+                        this.scheduleScanEditor(editor);
+                    } else {
+                        this.clearSnapshotIfNoLayersRemain(editor.document.uri);
+                    }
                 }
 
                 if (
@@ -97,18 +116,18 @@ export class FragmentTracker implements vscode.Disposable {
         }
 
         if (!this.config.isDocumentAllowed(editor.document)) {
-            this.disableDocument(editor.document.uri);
+            this.disableAllDocumentLayers(editor.document.uri);
             return;
         }
 
         const key = createUriKey(editor.document.uri);
 
-        if (this.trackedDocuments.has(key)) {
-            this.disableDocument(editor.document.uri);
+        if (this.fragmentTrackedDocuments.has(key)) {
+            this.disableFragmentHighlight(editor.document.uri);
             return;
         }
 
-        this.enableEditor(editor);
+        this.enableFragmentHighlight(editor);
     }
 
     public scanActiveEditor(): void {
@@ -120,7 +139,7 @@ export class FragmentTracker implements vscode.Disposable {
             }
 
             if (!this.config.isDocumentAllowed(editor.document)) {
-                this.disableDocument(editor.document.uri);
+                this.disableAllDocumentLayers(editor.document.uri);
                 return;
             }
 
@@ -136,22 +155,72 @@ export class FragmentTracker implements vscode.Disposable {
         this.temporaryFocusedTrackingEnabled = !this.temporaryFocusedTrackingEnabled;
 
         if (!this.temporaryFocusedTrackingEnabled) {
-            for (const key of this.trackedDocuments) {
+            for (const key of [...this.fragmentTrackedDocuments]) {
                 const uri = vscode.Uri.parse(key);
 
-                this.cancelPendingScan(key);
-                this.store.clearDocument(uri, "disabled");
+                this.disableFragmentHighlight(uri);
             }
 
-            this.trackedDocuments.clear();
             return;
         }
 
         const editor = vscode.window.activeTextEditor;
 
         if (editor !== undefined) {
-            this.enableEditor(editor);
+            this.enableFragmentHighlight(editor);
         }
+    }
+
+    public toggleActiveEditorInlineSyntaxHighlight(): void {
+        const editor = vscode.window.activeTextEditor;
+
+        if (editor === undefined || isPreviewDocument(editor.document)) {
+            return;
+        }
+
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableAllDocumentLayers(editor.document.uri);
+            return;
+        }
+
+        const key = createUriKey(editor.document.uri);
+
+        if (this.syntaxTrackedDocuments.has(key)) {
+            this.disableInlineSyntaxHighlight(editor.document.uri);
+            return;
+        }
+
+        this.enableInlineSyntaxHighlight(editor);
+    }
+
+    public toggleTemporaryFocusedInlineSyntaxHighlight(): void {
+        this.temporaryFocusedSyntaxTrackingEnabled = !this.temporaryFocusedSyntaxTrackingEnabled;
+
+        if (!this.temporaryFocusedSyntaxTrackingEnabled) {
+            for (const key of [...this.syntaxTrackedDocuments]) {
+                const uri = vscode.Uri.parse(key);
+
+                this.disableInlineSyntaxHighlight(uri);
+            }
+
+            return;
+        }
+
+        const editor = vscode.window.activeTextEditor;
+
+        if (editor !== undefined) {
+            this.enableInlineSyntaxHighlight(editor);
+        }
+    }
+
+    public isFragmentHighlightEnabled(uri: vscode.Uri): boolean {
+        return this.config.get("tracker.autoHighlightVisibleRanges") ||
+            this.fragmentTrackedDocuments.has(createUriKey(uri));
+    }
+
+    public isInlineSyntaxHighlightEnabled(uri: vscode.Uri): boolean {
+        return this.config.get("inlineSyntaxHighlighting.autoHighlightVisibleRanges") ||
+            this.syntaxTrackedDocuments.has(createUriKey(uri));
     }
 
     public dispose(): void {
@@ -159,27 +228,72 @@ export class FragmentTracker implements vscode.Disposable {
             this.cancelPendingScan(key);
         }
 
-        vscode.Disposable.from(...this.disposables).dispose();
+        vscode.Disposable.from(...this.disposables, this.highlightLayersChangedEmitter).dispose();
     }
 
-    private enableEditor(editor: vscode.TextEditor): void {
+    private enableFragmentHighlight(editor: vscode.TextEditor): void {
         if (isPreviewDocument(editor.document)) {
             return;
         }
 
         if (!this.config.isDocumentAllowed(editor.document)) {
-            this.disableDocument(editor.document.uri);
+            this.disableAllDocumentLayers(editor.document.uri);
             return;
         }
 
-        this.trackedDocuments.add(createUriKey(editor.document.uri));
+        this.fragmentTrackedDocuments.add(createUriKey(editor.document.uri));
+        this.highlightLayersChangedEmitter.fire(editor.document.uri);
         this.scheduleScanEditor(editor);
     }
 
-    private disableDocument(uri: vscode.Uri): void {
+    private enableInlineSyntaxHighlight(editor: vscode.TextEditor): void {
+        if (isPreviewDocument(editor.document)) {
+            return;
+        }
+
+        if (!this.config.isDocumentAllowed(editor.document)) {
+            this.disableAllDocumentLayers(editor.document.uri);
+            return;
+        }
+
+        this.syntaxTrackedDocuments.add(createUriKey(editor.document.uri));
+        this.highlightLayersChangedEmitter.fire(editor.document.uri);
+        this.scheduleScanEditor(editor);
+    }
+
+    private disableFragmentHighlight(uri: vscode.Uri): void {
         const key = createUriKey(uri);
 
-        this.trackedDocuments.delete(key);
+        this.fragmentTrackedDocuments.delete(key);
+        this.highlightLayersChangedEmitter.fire(uri);
+        this.clearSnapshotIfNoLayersRemain(uri);
+    }
+
+    private disableInlineSyntaxHighlight(uri: vscode.Uri): void {
+        const key = createUriKey(uri);
+
+        this.syntaxTrackedDocuments.delete(key);
+        this.highlightLayersChangedEmitter.fire(uri);
+        this.clearSnapshotIfNoLayersRemain(uri);
+    }
+
+    private disableAllDocumentLayers(uri: vscode.Uri): void {
+        const key = createUriKey(uri);
+
+        this.fragmentTrackedDocuments.delete(key);
+        this.syntaxTrackedDocuments.delete(key);
+        this.cancelPendingScan(key);
+        this.store.clearDocument(uri, "disabled");
+        this.highlightLayersChangedEmitter.fire(uri);
+    }
+
+    private clearSnapshotIfNoLayersRemain(uri: vscode.Uri): void {
+        if (this.shouldTrackUri(uri)) {
+            return;
+        }
+
+        const key = createUriKey(uri);
+
         this.cancelPendingScan(key);
         this.store.clearDocument(uri, "disabled");
     }
@@ -198,12 +312,11 @@ export class FragmentTracker implements vscode.Disposable {
         }
 
         if (!this.config.isDocumentAllowed(editor.document)) {
-            this.disableDocument(editor.document.uri);
+            this.disableAllDocumentLayers(editor.document.uri);
             return false;
         }
 
-        return this.config.get("tracker.autoHighlightVisibleRanges") ||
-            this.trackedDocuments.has(createUriKey(editor.document.uri));
+        return this.shouldTrackUri(editor.document.uri);
     }
 
     private handleActiveEditorChange(editor: vscode.TextEditor | undefined): void {
@@ -284,7 +397,7 @@ export class FragmentTracker implements vscode.Disposable {
         }
 
         if (!this.config.isDocumentAllowed(editor.document)) {
-            this.disableDocument(editor.document.uri);
+            this.disableAllDocumentLayers(editor.document.uri);
             return;
         }
 
@@ -306,7 +419,7 @@ export class FragmentTracker implements vscode.Disposable {
 
     private scanEditor(editor: vscode.TextEditor): void {
         if (!this.config.isDocumentAllowed(editor.document)) {
-            this.disableDocument(editor.document.uri);
+            this.disableAllDocumentLayers(editor.document.uri);
             return;
         }
 
@@ -347,6 +460,10 @@ export class FragmentTracker implements vscode.Disposable {
 
         clearTimeout(timer);
         this.pendingScans.delete(key);
+    }
+
+    private shouldTrackUri(uri: vscode.Uri): boolean {
+        return this.isFragmentHighlightEnabled(uri) || this.isInlineSyntaxHighlightEnabled(uri);
     }
 }
 
